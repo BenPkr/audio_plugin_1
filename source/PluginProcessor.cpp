@@ -10,8 +10,14 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
                       #endif
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
-                       )
+                       ),
+       apvts (*this, nullptr, "Parameters", createParameterLayout()) // 1. Initialized APVTS
 {
+    // 2. Cache raw pointers to avoid string lookups on the audio thread
+    delayParam       = apvts.getRawParameterValue (ParameterIDs::delay);
+    blendParam       = apvts.getRawParameterValue (ParameterIDs::blend);
+    feedforwardParam = apvts.getRawParameterValue (ParameterIDs::feedforward);
+    feedbackParam    = apvts.getRawParameterValue (ParameterIDs::feedback);
 }
 
 AudioPluginAudioProcessor::~AudioPluginAudioProcessor()
@@ -86,15 +92,15 @@ void AudioPluginAudioProcessor::changeProgramName (int index, const juce::String
 //==============================================================================
 void AudioPluginAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // Use this method as the place to do any pre-playback
-    // initialisation that you need..
-    juce::ignoreUnused (sampleRate, samplesPerBlock);
+    // 3. Prepare DSP filter buffer allocation on main thread
+    combFilter.prepare (sampleRate, samplesPerBlock, getTotalNumInputChannels());
 }
 
 void AudioPluginAudioProcessor::releaseResources()
 {
     // When playback stops, you can use this as an opportunity to free up any
     // spare memory, etc.
+    combFilter.reset();
 }
 
 bool AudioPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -139,18 +145,13 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
-    // This is the place where you'd normally do the guts of your plugin's
-    // audio processing...
-    // Make sure to reset the state if your inner loop is processing
-    // the samples and the outer loop is handling the channels.
-    // Alternatively, you can process the samples with the channels
-    // interleaved by keeping the same state.
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
-    {
-        auto* channelData = buffer.getWritePointer (channel);
-        juce::ignoreUnused (channelData);
-        // ..do something to the data...
-    }
+    // 4. Update filter parameters and process audio block
+    combFilter.setDelayMs           (delayParam       ? delayParam->load()       : 10.0f);
+    combFilter.setBlend             (blendParam       ? blendParam->load()       : 1.0f);
+    combFilter.setFeedforward       (feedforwardParam ? feedforwardParam->load() : 0.5f);
+    combFilter.setFeedback          (feedbackParam    ? feedbackParam->load()    : 0.0f);
+
+    combFilter.processBlock (buffer);
 }
 
 //==============================================================================
@@ -167,17 +168,20 @@ juce::AudioProcessorEditor* AudioPluginAudioProcessor::createEditor()
 //==============================================================================
 void AudioPluginAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    // You should use this method to store your parameters in the memory block.
-    // You could do that either as raw data, or use the XML or ValueTree classes
-    // as intermediaries to make it easy to save and load complex data.
-    juce::ignoreUnused (destData);
+    // 5. Save parameter state
+    auto state = apvts.copyState();
+    std::unique_ptr<juce::XmlElement> xml (state.createXml());
+    copyXmlToBinary (*xml, destData);
 }
 
 void AudioPluginAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    // You should use this method to restore your parameters from this memory block,
-    // whose contents will have been created by the getStateInformation() call.
-    juce::ignoreUnused (data, sizeInBytes);
+    // 5. Restore parameter state
+    std::unique_ptr<juce::XmlElement> xmlState (getXmlFromBinary (data, sizeInBytes));
+
+    if (xmlState.get() != nullptr)
+        if (xmlState->hasTagName (apvts.state.getType()))
+            apvts.replaceState (juce::ValueTree::fromXml (*xmlState));
 }
 
 //==============================================================================

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "Parameters.h"
+#include "dsp/CombFilter.h"
 
 //==============================================================================
 class AudioPluginAudioProcessor final : public juce::AudioProcessor
@@ -14,10 +16,11 @@ public:
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
 
+   #ifndef JucePlugin_PreferredChannelConfigurations
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
+   #endif
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
-    using AudioProcessor::processBlock;
 
     //==============================================================================
     juce::AudioProcessorEditor* createEditor() override;
@@ -42,7 +45,18 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    // Public access to APVTS for Editor attachments
+    juce::AudioProcessorValueTreeState apvts;
+
 private:
-    //==============================================================================
+//==============================================================================
+    CombFilter combFilter;
+
+    // Cached raw parameter pointers for fast, thread-safe access in processBlock
+    std::atomic<float>* delayParam      = nullptr;
+    std::atomic<float>* blendParam      = nullptr;
+    std::atomic<float>* feedforwardParam = nullptr;
+    std::atomic<float>* feedbackParam   = nullptr;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessor)
 };
