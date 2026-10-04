@@ -1,7 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-//==============================================================================
 AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAudioProcessor& p)
     : AudioProcessorEditor (&p), 
       audioProcessor (p),
@@ -9,123 +8,134 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
       poleZeroPlot (p.apvts),
       modulationSignalPlot (p.apvts)
 {
-    // 1. Add Visual Plot Components
     addAndMakeVisible (frequencyResponsePlot);
     addAndMakeVisible (poleZeroPlot);
     addAndMakeVisible (modulationSignalPlot);
 
-    // Helper lambda to configure sliders cleanly
-    auto setupSlider = [this](juce::Slider& slider, juce::Label& label, const juce::String& text)
+    // Setup Labeled Mode Selector Dial
+    modeDial.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
+    modeDial.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 18);
+    modeDial.setRange (0, 4, 1);
+    
+    // Map Mode Selector Dial numbers to explicit preset names
+    modeDial.textFromValueFunction = [](double val)
     {
-        slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-        slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 60, 20);
-        addAndMakeVisible (slider);
-
-        label.setText (text, juce::dontSendNotification);
-        label.setJustificationType (juce::Justification::centred);
-        label.attachToComponent (&slider, false);
-        addAndMakeVisible (label);
+        const int mode = static_cast<int>(val);
+        switch (mode)
+        {
+            case 1:  return juce::String("Vibrato");
+            case 2:  return juce::String("Flanger");
+            case 3:  return juce::String("Chorus");
+            case 4:  return juce::String("Doubling");
+            default: return juce::String("Custom");
+        }
     };
+    modeDial.updateText();
 
-    // 2. Setup Base Sliders & Labels
-    setupSlider (delaySlider,       delayLabel,       "Delay (ms)");
-    setupSlider (blendSlider,       blendLabel,       "Blend (BL)");
-    setupSlider (feedforwardSlider, feedforwardLabel, "Feedforward");
-    setupSlider (feedbackSlider,    feedbackLabel,    "Feedback");
+    modeDial.onValueChange = [this]() { updateActivePanel (static_cast<int>(modeDial.getValue())); };
+    addAndMakeVisible (modeDial);
 
-    // 3. Setup Modulation Controls
-    addAndMakeVisible (modEnableButton);
+    modeDialLabel.setText ("Mode Select", juce::dontSendNotification);
+    modeDialLabel.setJustificationType (juce::Justification::centred);
+    modeDialLabel.attachToComponent (&modeDial, false);
+    addAndMakeVisible (modeDialLabel);
 
-    modTypeComboBox.addItemList ({ "Sine", "Lowpass Noise" }, 1);
-    addAndMakeVisible (modTypeComboBox);
+    // Build Zölzer preset panel configurations (ModMode: 0 = Off, 1 = Sine, 2 = Noise)
+    PresetPanel::Config customCfg  { "CUSTOM (FREE)", {0.1, 100.0, 10.0}, {0.0, 30.0, 1.0}, {0.05, 20.0, 1.0} };
+    
+    // Vibrato: BL=0 (locked), FF=1 (locked), FB=0 (locked), Sine LFO (ModMode=1)[cite: 1]
+    PresetPanel::Config vibCfg     { "VIBRATO", {0.1, 5.0, 0.1}, {0.0, 3.0, 2.0}, {0.1, 5.0, 2.0}, 0.0f, true, 1.0f, true, 0.0f, true, 0.1f, false, 1, true };
+    
+    // Flanger: BL=0.7 (locked), FF=0.7 (locked), FB=0.7 (locked), Sine LFO (ModMode=1)[cite: 1]
+    PresetPanel::Config flangCfg   { "FLANGER", {0.1, 5.0, 0.1}, {0.0, 2.0, 1.5}, {0.1, 1.0, 0.5}, 0.7f, true, 0.7f, true, 0.7f, true, 0.1f, false, 1, true };
+    
+    // Chorus: BL=0.7 (locked), FF=1.0 (locked), FB=-0.7 (locked), Noise LFO (ModMode=2)[cite: 1]
+    PresetPanel::Config chorusCfg  { "CHORUS", {1.0, 30.0, 15.0}, {1.0, 30.0, 10.0}, {0.1, 5.0, 1.0}, 0.7f, true, 1.0f, true, -0.7f, true, 15.0f, false, 2, true };
+    
+    // Doubling: BL=0.7 (locked), FF=0.7 (locked), FB=0 (locked), Noise LFO (ModMode=2)[cite: 1]
+    PresetPanel::Config doubleCfg  { "DOUBLING", {10.0, 100.0, 30.0}, {1.0, 100.0, 15.0}, {0.1, 5.0, 0.5}, 0.7f, true, 0.7f, true, 0.0f, true, 30.0f, false, 2, true };
 
-    modTypeLabel.setText ("Type", juce::dontSendNotification);
-    modTypeLabel.setJustificationType (juce::Justification::centred);
-    modTypeLabel.attachToComponent (&modTypeComboBox, false);
-    addAndMakeVisible (modTypeLabel);
+    customPanel   = std::make_unique<PresetPanel> (p.apvts, customCfg);
+    vibratoPanel  = std::make_unique<PresetPanel> (p.apvts, vibCfg);
+    flangerPanel  = std::make_unique<PresetPanel> (p.apvts, flangCfg);
+    chorusPanel   = std::make_unique<PresetPanel> (p.apvts, chorusCfg);
+    doublingPanel = std::make_unique<PresetPanel> (p.apvts, doubleCfg);
 
-    setupSlider (modDepthSlider,     modDepthLabel,     "Mod Depth (ms)");
-    setupSlider (modFrequencySlider, modFrequencyLabel, "Mod Rate (Hz)");
+    addAndMakeVisible (*customPanel);
+    addAndMakeVisible (*vibratoPanel);
+    addAndMakeVisible (*flangerPanel);
+    addAndMakeVisible (*chorusPanel);
+    addAndMakeVisible (*doublingPanel);
 
-    // 4. Attach Controls to APVTS Parameters
-    delayAttachment       = std::make_unique<SliderAttachment> (audioProcessor.apvts, ParameterIDs::delay,       delaySlider);
-    blendAttachment       = std::make_unique<SliderAttachment> (audioProcessor.apvts, ParameterIDs::blend,       blendSlider);
-    feedforwardAttachment = std::make_unique<SliderAttachment> (audioProcessor.apvts, ParameterIDs::feedforward, feedforwardSlider);
-    feedbackAttachment    = std::make_unique<SliderAttachment> (audioProcessor.apvts, ParameterIDs::feedback,    feedbackSlider);
+    updateActivePanel (0);
 
-    modEnableAttachment    = std::make_unique<ButtonAttachment>   (audioProcessor.apvts, ParameterIDs::modEnable,    modEnableButton);
-    modTypeAttachment      = std::make_unique<ComboBoxAttachment> (audioProcessor.apvts, ParameterIDs::modType,      modTypeComboBox);
-    modDepthAttachment     = std::make_unique<SliderAttachment>   (audioProcessor.apvts, ParameterIDs::modDepth,     modDepthSlider);
-    modFrequencyAttachment = std::make_unique<SliderAttachment>   (audioProcessor.apvts, ParameterIDs::modFrequency, modFrequencySlider);
-
-    // Resizable window sized to fit all 3 plots and controls nicely
     setResizable (true, true);
-    setSize (720, 620);
+    setSize (900, 720);
 }
 
-AudioPluginAudioProcessorEditor::~AudioPluginAudioProcessorEditor()
+AudioPluginAudioProcessorEditor::~AudioPluginAudioProcessorEditor() {}
+
+void AudioPluginAudioProcessorEditor::updateActivePanel (int activeIndex)
 {
+    PresetPanel* panels[5] = { customPanel.get(), vibratoPanel.get(), flangerPanel.get(), chorusPanel.get(), doublingPanel.get() };
+
+    for (int i = 0; i < 5; ++i)
+    {
+        if (i == activeIndex)
+        {
+            panels[i]->setEnabled (true);
+            panels[i]->setAlpha (1.0f);  // Fully lit & active
+            panels[i]->applyToAPVTS();   // Sync settings to DSP engine
+        }
+        else
+        {
+            panels[i]->setEnabled (false);
+            panels[i]->setAlpha (0.25f); // Greyed out & locked out
+        }
+    }
 }
 
-//==============================================================================
 void AudioPluginAudioProcessorEditor::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colour (0xff1e1e24)); // Dark background
-
+    g.fillAll (juce::Colour (0xff1e1e24));
     g.setColour (juce::Colours::white);
     g.setFont (16.0f);
     g.drawText ("Universal Comb Filter", getLocalBounds().removeFromTop (30), juce::Justification::centred, true);
-
-    // Section separator line above modulation controls
-    g.setColour (juce::Colours::darkgrey.withAlpha (0.5f));
-    g.drawHorizontalLine (385, 15.0f, static_cast<float> (getWidth() - 15));
 }
 
 void AudioPluginAudioProcessorEditor::resized()
 {
     auto bounds = getLocalBounds().reduced (10);
-    bounds.removeFromTop (25); // Title space
+    bounds.removeFromTop (25);
 
-    // --- Top Section: Frequency & Pole-Zero Plots ---
-    auto topPlotArea = bounds.removeFromTop (190);
-    const int plotWidth = (topPlotArea.getWidth() - 10) / 2;
+    // --- Top Header: Mode Dial + Oscilloscope ---
+    auto headerArea = bounds.removeFromTop (125);
+    
+    auto dialArea = headerArea.removeFromLeft (110);
+    modeDialLabel.setBounds (dialArea.removeFromTop (16));
+    modeDial.setBounds (dialArea);
 
-    frequencyResponsePlot.setBounds (topPlotArea.removeFromLeft (plotWidth));
-    topPlotArea.removeFromLeft (10); // Gap
-    poleZeroPlot.setBounds (topPlotArea);
+    headerArea.removeFromLeft (10); // Spacing gap
+    modulationSignalPlot.setBounds (headerArea);
 
     bounds.removeFromTop (12);
 
-    // --- Middle Section: Base Filter Rotary Knobs ---
-    auto knobArea = bounds.removeFromTop (125);
-    const int numKnobs = 4;
-    const int knobWidth = knobArea.getWidth() / numKnobs;
-
-    delaySlider.setBounds       (knobArea.removeFromLeft (knobWidth).reduced (10, 0));
-    blendSlider.setBounds       (knobArea.removeFromLeft (knobWidth).reduced (10, 0));
-    feedforwardSlider.setBounds (knobArea.removeFromLeft (knobWidth).reduced (10, 0));
-    feedbackSlider.setBounds    (knobArea.removeFromLeft (knobWidth).reduced (10, 0));
+    // --- Middle Section: Frequency Response & Pole-Zero Plots ---
+    auto plotArea = bounds.removeFromTop (170);
+    const int plotW = (plotArea.getWidth() - 10) / 2;
+    frequencyResponsePlot.setBounds (plotArea.removeFromLeft (plotW));
+    plotArea.removeFromLeft (10);
+    poleZeroPlot.setBounds (plotArea);
 
     bounds.removeFromTop (15);
 
-    // --- Bottom Section Left: Modulation Controls ---
-    auto bottomArea = bounds;
-    auto modControlsArea = bottomArea.removeFromTop (115);
+    // --- Bottom Section: 5 Preset Channel Panels ---
+    auto panelsArea = bounds;
+    const int panelW = (panelsArea.getWidth() - 20) / 5;
 
-    const int modColWidth = modControlsArea.getWidth() / 4;
-
-    // Col 1: Toggle Button
-    auto toggleArea = modControlsArea.removeFromLeft (modColWidth);
-    modEnableButton.setBounds (toggleArea.withSizeKeepingCentre (110, 30));
-
-    // Col 2: Type Dropdown
-    auto comboArea = modControlsArea.removeFromLeft (modColWidth);
-    modTypeComboBox.setBounds (comboArea.withSizeKeepingCentre (110, 24));
-
-    // Col 3 & 4: Mod Depth and Rate Knobs
-    modDepthSlider.setBounds     (modControlsArea.removeFromLeft (modColWidth).reduced (10, 0));
-    modFrequencySlider.setBounds (modControlsArea.removeFromLeft (modColWidth).reduced (10, 0));
-
-    // --- Bottom Section Right/Full Width: Time-Domain Oscilloscope Plot ---
-    modulationSignalPlot.setBounds (bottomArea.reduced (5, 0));
+    customPanel->setBounds   (panelsArea.removeFromLeft (panelW)); panelsArea.removeFromLeft (5);
+    vibratoPanel->setBounds  (panelsArea.removeFromLeft (panelW)); panelsArea.removeFromLeft (5);
+    flangerPanel->setBounds  (panelsArea.removeFromLeft (panelW)); panelsArea.removeFromLeft (5);
+    chorusPanel->setBounds   (panelsArea.removeFromLeft (panelW)); panelsArea.removeFromLeft (5);
+    doublingPanel->setBounds (panelsArea);
 }

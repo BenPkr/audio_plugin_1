@@ -93,6 +93,8 @@ target_sources(UniversalCombFilter
         source/gui/PoleZeroPlot.cpp
         source/gui/ModulationSignalPlot.h
         source/gui/ModulationSignalPlot.cpp
+        source/gui/PresetPanel.h
+        source/gui/PresetPanel.cpp
 )
 
 # `target_compile_definitions` adds some preprocessor definitions to our target. In a Projucer

@@ -6,15 +6,14 @@
 #include "gui/FrequencyResponsePlot.h"
 #include "gui/PoleZeroPlot.h"
 #include "gui/ModulationSignalPlot.h"
+#include "gui/PresetPanel.h"
 
-//==============================================================================
 class AudioPluginAudioProcessorEditor  : public juce::AudioProcessorEditor
 {
 public:
     explicit AudioPluginAudioProcessorEditor (AudioPluginAudioProcessor&);
     ~AudioPluginAudioProcessorEditor() override;
 
-    //==============================================================================
     void paint (juce::Graphics&) override;
     void resized() override;
 
@@ -26,41 +25,21 @@ private:
     PoleZeroPlot poleZeroPlot;
     ModulationSignalPlot modulationSignalPlot;
 
-    // Base Filter Controls & Labels
-    juce::Slider delaySlider;
-    juce::Slider blendSlider;
-    juce::Slider feedforwardSlider;
-    juce::Slider feedbackSlider;
+    // Mode Selector
+    juce::Slider modeDial;
+    juce::Label modeDialLabel;
 
-    juce::Label delayLabel;
-    juce::Label blendLabel;
-    juce::Label feedforwardLabel;
-    juce::Label feedbackLabel;
+    // 5 Dedicated Hardware Preset Panels
+    std::unique_ptr<PresetPanel> customPanel;
+    std::unique_ptr<PresetPanel> vibratoPanel;
+    std::unique_ptr<PresetPanel> flangerPanel;
+    std::unique_ptr<PresetPanel> chorusPanel;
+    std::unique_ptr<PresetPanel> doublingPanel;
 
-    // Modulation Controls & Labels
-    juce::ToggleButton modEnableButton { "Modulation" };
-    juce::ComboBox modTypeComboBox;
-    juce::Slider modDepthSlider;
-    juce::Slider modFrequencySlider;
-
-    juce::Label modTypeLabel;
-    juce::Label modDepthLabel;
-    juce::Label modFrequencyLabel;
-
-    // APVTS Attachments
-    using SliderAttachment   = juce::AudioProcessorValueTreeState::SliderAttachment;
-    using ButtonAttachment   = juce::AudioProcessorValueTreeState::ButtonAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
+    std::unique_ptr<ComboBoxAttachment> presetAttachment;
 
-    std::unique_ptr<SliderAttachment> delayAttachment;
-    std::unique_ptr<SliderAttachment> blendAttachment;
-    std::unique_ptr<SliderAttachment> feedforwardAttachment;
-    std::unique_ptr<SliderAttachment> feedbackAttachment;
-
-    std::unique_ptr<ButtonAttachment> modEnableAttachment;
-    std::unique_ptr<ComboBoxAttachment> modTypeAttachment;
-    std::unique_ptr<SliderAttachment> modDepthAttachment;
-    std::unique_ptr<SliderAttachment> modFrequencyAttachment;
+    void updateActivePanel (int activeIndex);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessorEditor)
 };
