@@ -6,11 +6,13 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
     : AudioProcessorEditor (&p), 
       audioProcessor (p),
       frequencyResponsePlot (p.apvts),
-      poleZeroPlot (p.apvts)
+      poleZeroPlot (p.apvts),
+      modulationSignalPlot (p.apvts)
 {
     // 1. Add Visual Plot Components
     addAndMakeVisible (frequencyResponsePlot);
     addAndMakeVisible (poleZeroPlot);
+    addAndMakeVisible (modulationSignalPlot);
 
     // Helper lambda to configure sliders cleanly
     auto setupSlider = [this](juce::Slider& slider, juce::Label& label, const juce::String& text)
@@ -56,9 +58,9 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
     modDepthAttachment     = std::make_unique<SliderAttachment>   (audioProcessor.apvts, ParameterIDs::modDepth,     modDepthSlider);
     modFrequencyAttachment = std::make_unique<SliderAttachment>   (audioProcessor.apvts, ParameterIDs::modFrequency, modFrequencySlider);
 
-    // Make window resizable with expanded height for modulation controls
+    // Resizable window sized to fit all 3 plots and controls nicely
     setResizable (true, true);
-    setSize (700, 560);
+    setSize (720, 620);
 }
 
 AudioPluginAudioProcessorEditor::~AudioPluginAudioProcessorEditor()
@@ -74,28 +76,28 @@ void AudioPluginAudioProcessorEditor::paint (juce::Graphics& g)
     g.setFont (16.0f);
     g.drawText ("Universal Comb Filter", getLocalBounds().removeFromTop (30), juce::Justification::centred, true);
 
-    // Draw thin section separator between base controls and modulation controls
+    // Section separator line above modulation controls
     g.setColour (juce::Colours::darkgrey.withAlpha (0.5f));
-    g.drawHorizontalLine (415, 15.0f, static_cast<float> (getWidth() - 15));
+    g.drawHorizontalLine (385, 15.0f, static_cast<float> (getWidth() - 15));
 }
 
 void AudioPluginAudioProcessorEditor::resized()
 {
     auto bounds = getLocalBounds().reduced (10);
-    bounds.removeFromTop (25); // Reserve title area
+    bounds.removeFromTop (25); // Title space
 
-    // --- Top Section: Plots ---
-    auto plotArea = bounds.removeFromTop (200);
-    const int plotWidth = (plotArea.getWidth() - 10) / 2;
+    // --- Top Section: Frequency & Pole-Zero Plots ---
+    auto topPlotArea = bounds.removeFromTop (190);
+    const int plotWidth = (topPlotArea.getWidth() - 10) / 2;
 
-    frequencyResponsePlot.setBounds (plotArea.removeFromLeft (plotWidth));
-    plotArea.removeFromLeft (10); // Gap between plots
-    poleZeroPlot.setBounds (plotArea);
+    frequencyResponsePlot.setBounds (topPlotArea.removeFromLeft (plotWidth));
+    topPlotArea.removeFromLeft (10); // Gap
+    poleZeroPlot.setBounds (topPlotArea);
 
-    bounds.removeFromTop (15); // Gap between plots and controls
+    bounds.removeFromTop (12);
 
     // --- Middle Section: Base Filter Rotary Knobs ---
-    auto knobArea = bounds.removeFromTop (130);
+    auto knobArea = bounds.removeFromTop (125);
     const int numKnobs = 4;
     const int knobWidth = knobArea.getWidth() / numKnobs;
 
@@ -104,21 +106,26 @@ void AudioPluginAudioProcessorEditor::resized()
     feedforwardSlider.setBounds (knobArea.removeFromLeft (knobWidth).reduced (10, 0));
     feedbackSlider.setBounds    (knobArea.removeFromLeft (knobWidth).reduced (10, 0));
 
-    bounds.removeFromTop (20); // Gap for section separator
+    bounds.removeFromTop (15);
 
-    // --- Bottom Section: Modulation Controls ---
-    auto modArea = bounds;
-    const int modSectionWidth = modArea.getWidth() / 4;
+    // --- Bottom Section Left: Modulation Controls ---
+    auto bottomArea = bounds;
+    auto modControlsArea = bottomArea.removeFromTop (115);
+
+    const int modColWidth = modControlsArea.getWidth() / 4;
 
     // Col 1: Toggle Button
-    auto toggleArea = modArea.removeFromLeft (modSectionWidth);
-    modEnableButton.setBounds (toggleArea.withSizeKeepingCentre (120, 30));
+    auto toggleArea = modControlsArea.removeFromLeft (modColWidth);
+    modEnableButton.setBounds (toggleArea.withSizeKeepingCentre (110, 30));
 
-    // Col 2: Waveform Choice Dropdown
-    auto comboArea = modArea.removeFromLeft (modSectionWidth);
-    modTypeComboBox.setBounds (comboArea.withSizeKeepingCentre (120, 24));
+    // Col 2: Type Dropdown
+    auto comboArea = modControlsArea.removeFromLeft (modColWidth);
+    modTypeComboBox.setBounds (comboArea.withSizeKeepingCentre (110, 24));
 
-    // Col 3 & 4: Mod Depth and Rate Rotary Knobs
-    modDepthSlider.setBounds     (modArea.removeFromLeft (modSectionWidth).reduced (10, 0));
-    modFrequencySlider.setBounds (modArea.removeFromLeft (modSectionWidth).reduced (10, 0));
+    // Col 3 & 4: Mod Depth and Rate Knobs
+    modDepthSlider.setBounds     (modControlsArea.removeFromLeft (modColWidth).reduced (10, 0));
+    modFrequencySlider.setBounds (modControlsArea.removeFromLeft (modColWidth).reduced (10, 0));
+
+    // --- Bottom Section Right/Full Width: Time-Domain Oscilloscope Plot ---
+    modulationSignalPlot.setBounds (bottomArea.reduced (5, 0));
 }

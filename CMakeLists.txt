@@ -78,11 +78,22 @@ target_include_directories(UniversalCombFilter PRIVATE source)
 
 target_sources(UniversalCombFilter
     PRIVATE
+        source/Parameters.h
+        source/PluginProcessor.h
         source/PluginProcessor.cpp
+        source/PluginEditor.h
         source/PluginEditor.cpp
+        source/dsp/CombMath.h
+        source/dsp/CombFilter.h
         source/dsp/CombFilter.cpp
+        source/dsp/Modulator.h
+        source/gui/FrequencyResponsePlot.h
         source/gui/FrequencyResponsePlot.cpp
-        source/gui/PoleZeroPlot.cpp)
+        source/gui/PoleZeroPlot.h
+        source/gui/PoleZeroPlot.cpp
+        source/gui/ModulationSignalPlot.h
+        source/gui/ModulationSignalPlot.cpp
+)
 
 # `target_compile_definitions` adds some preprocessor definitions to our target. In a Projucer
 # project, these might be passed in the 'Preprocessor Definitions' field. JUCE modules also make use

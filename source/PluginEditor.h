@@ -5,6 +5,7 @@
 #include "PluginProcessor.h"
 #include "gui/FrequencyResponsePlot.h"
 #include "gui/PoleZeroPlot.h"
+#include "gui/ModulationSignalPlot.h"
 
 //==============================================================================
 class AudioPluginAudioProcessorEditor  : public juce::AudioProcessorEditor
@@ -20,11 +21,12 @@ public:
 private:
     AudioPluginAudioProcessor& audioProcessor;
 
-    // Custom Visualizations
+    // Visualizations
     FrequencyResponsePlot frequencyResponsePlot;
     PoleZeroPlot poleZeroPlot;
+    ModulationSignalPlot modulationSignalPlot;
 
-    // Base Controls & Labels
+    // Base Filter Controls & Labels
     juce::Slider delaySlider;
     juce::Slider blendSlider;
     juce::Slider feedforwardSlider;
