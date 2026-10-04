@@ -6,12 +6,12 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
      : AudioProcessor (BusesProperties()
                      #if ! JucePlugin_IsMidiEffect
                       #if ! JucePlugin_IsSynth
-                       .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+                       .withInput  ("Input",  juce::AudioChannelSet::mono(), true)
                       #endif
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
                        ),
-       apvts (*this, nullptr, "Parameters", createParameterLayout()) // 1. Initialized APVTS
+       apvts (*this, nullptr, "Parameters", createParameterLayout())
 {
     // 2. Cache raw pointers to avoid string lookups on the audio thread
     delayParam       = apvts.getRawParameterValue (ParameterIDs::delay);
@@ -109,21 +109,21 @@ bool AudioPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layou
     juce::ignoreUnused (layouts);
     return true;
   #else
-    // This is the place where you check if the layout is supported.
-    // In this template code we only support mono or stereo.
-    // Some plugin hosts, such as certain GarageBand versions, will only
-    // load plugins that support stereo bus layouts.
-    if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
-     && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+    const auto mainInput  = layouts.getMainInputChannelSet();
+    const auto mainOutput = layouts.getMainOutputChannelSet();
+
+    // 1. Must be Mono or Stereo
+    if (mainOutput != juce::AudioChannelSet::mono() && mainOutput != juce::AudioChannelSet::stereo())
         return false;
 
-    // This checks if the input layout matches the output layout
-   #if ! JucePlugin_IsSynth
-    if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
-        return false;
-   #endif
+    // 2. Allow Mono-In -> Mono-Out, Mono-In -> Stereo-Out, or Stereo-In -> Stereo-Out
+    if (mainInput == juce::AudioChannelSet::mono())
+        return true;
 
-    return true;
+    if (mainInput == juce::AudioChannelSet::stereo() && mainOutput == juce::AudioChannelSet::stereo())
+        return true;
+
+    return false;
   #endif
 }
 
@@ -136,22 +136,22 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
-    // In case we have more outputs than inputs, this code clears any output
-    // channels that didn't contain input data, (because these aren't
-    // guaranteed to be empty - they may contain garbage).
-    // This is here to avoid people getting screaming feedback
-    // when they first compile a plugin, but obviously you don't need to keep
-    // this code if your algorithm always overwrites all the output channels.
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
-    // 4. Update filter parameters and process audio block
     combFilter.setDelayMs           (delayParam       ? delayParam->load()       : 10.0f);
     combFilter.setBlend             (blendParam       ? blendParam->load()       : 1.0f);
     combFilter.setFeedforward       (feedforwardParam ? feedforwardParam->load() : 0.5f);
     combFilter.setFeedback          (feedbackParam    ? feedbackParam->load()    : 0.0f);
 
+    // Process available input channels
     combFilter.processBlock (buffer);
+
+    // If input is mono (Mic on ch 1) but output is stereo, duplicate left to right channel
+    if (totalNumInputChannels == 1 && totalNumOutputChannels == 2)
+    {
+        buffer.copyFrom (1, 0, buffer, 0, 0, buffer.getNumSamples());
+    }
 }
 
 //==============================================================================

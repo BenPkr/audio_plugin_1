@@ -5,28 +5,33 @@ void CombFilter::prepare(double sampleRate, int samplesPerBlock, int numChannels
 {
     currentSampleRate = sampleRate;
 
-    // 1. Prepare parameter smoothers over a 20ms ramp duration
+    // Ensure numChannels is at least 1 or 2
+    const int channelsToPrepare = std::max(1, numChannels);
+
+    // 1. Prepare parameter smoothers
     constexpr float rampDurationSec = 0.020f;
     smoothedDelayMs.reset(sampleRate, rampDurationSec);
     smoothedBlend.reset(sampleRate, rampDurationSec);
     smoothedFeedforward.reset(sampleRate, rampDurationSec);
     smoothedFeedback.reset(sampleRate, rampDurationSec);
 
-    // Set default initial values for smoothers
+    // Set initial target values explicitly so smoothers aren't stuck at 0
     smoothedDelayMs.setCurrentAndTargetValue(10.0f);
     smoothedBlend.setCurrentAndTargetValue(1.0f);
     smoothedFeedforward.setCurrentAndTargetValue(0.5f);
     smoothedFeedback.setCurrentAndTargetValue(0.0f);
 
-    // 2. Prepare fractional delay line buffers per channel
+    // 2. Size and prepare delay lines
     const auto maxDelaySamples = static_cast<int>(std::ceil((maxDelayMs / 1000.0f) * currentSampleRate));
 
-    delayLines.resize(static_cast<size_t>(numChannels));
-    juce::dsp::ProcessSpec spec { sampleRate, static_cast<juce::uint32>(samplesPerBlock), static_cast<juce::uint32>(numChannels) };
+    delayLines.resize(static_cast<size_t>(channelsToPrepare));
+
+    // Notice: DelayLine::prepare spec expects 1 channel per DelayLine object!
+    juce::dsp::ProcessSpec singleChannelSpec { sampleRate, static_cast<juce::uint32>(samplesPerBlock), 1 };
 
     for (auto& delayLine : delayLines)
     {
-        delayLine.prepare(spec);
+        delayLine.prepare(singleChannelSpec);
         delayLine.setMaximumDelayInSamples(maxDelaySamples);
         delayLine.reset();
     }
@@ -56,13 +61,13 @@ void CombFilter::processBlock(juce::AudioBuffer<float>& buffer)
     if (numChannels == 0 || numSamples == 0)
         return;
 
-    // Safety check channel sizing match
+    // Safety check size
     if (static_cast<size_t>(numChannels) > delayLines.size())
         return;
 
     for (int sample = 0; sample < numSamples; ++sample)
     {
-        // Advance parameter values sample-by-sample for smooth transitions
+        // Advance parameter smoothers
         const float curDelayMs     = smoothedDelayMs.getNextValue();
         const float curBlend       = smoothedBlend.getNextValue();
         const float curFeedforward = smoothedFeedforward.getNextValue();
@@ -78,17 +83,17 @@ void CombFilter::processBlock(juce::AudioBuffer<float>& buffer)
             auto& delayLine = delayLines[static_cast<size_t>(channel)];
             delayLine.setDelay(curDelaySamples);
 
-            // Read past sample xh[n - M]
-            const float xh_delayed = delayLine.popSample(channel);
+            // FIX HERE: Pass 0 as the channel index to the single-channel delayLine object
+            const float xh_delayed = delayLine.popSample(0);
 
-            // Universal comb equation:
+            // Universal comb filter difference equations:
             // xh[n] = x[n] + FB * xh[n - M]
             const float xh = x + curFeedback * xh_delayed;
 
-            // Push newest xh sample to buffer
-            delayLine.pushSample(channel, xh);
+            // Push newest xh sample (also using channel index 0)
+            delayLine.pushSample(0, xh);
 
-            // Output y[n] = BL * xh[n] + FF * xh[n - M]
+            // Output: y[n] = BL * xh[n] + FF * xh[n - M]
             const float y = curBlend * xh + curFeedforward * xh_delayed;
 
             channelData[sample] = y;
