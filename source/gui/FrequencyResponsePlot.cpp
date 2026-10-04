@@ -29,7 +29,11 @@ void FrequencyResponsePlot::timerCallback()
     const float curFF    = feedforwardParam ? feedforwardParam->load() : 0.5f;
     const float curFB    = feedbackParam   ? feedbackParam->load()   : 0.0f;
 
-    if (curDelay != lastDelay || curBlend != lastBlend || curFF != lastFF || curFB != lastFB)
+    constexpr float threshold = 1e-5f;
+    if (std::abs(curDelay - lastDelay) > threshold ||
+        std::abs(curBlend - lastBlend) > threshold ||
+        std::abs(curFF    - lastFF)    > threshold ||
+        std::abs(curFB    - lastFB)    > threshold)
     {
         lastDelay = curDelay;
         lastBlend = curBlend;
