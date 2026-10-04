@@ -13,11 +13,17 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
                        ),
        apvts (*this, nullptr, "Parameters", createParameterLayout())
 {
-    // 2. Cache raw pointers to avoid string lookups on the audio thread
+    // Cache raw pointers to avoid string lookups on the audio thread
     delayParam       = apvts.getRawParameterValue (ParameterIDs::delay);
     blendParam       = apvts.getRawParameterValue (ParameterIDs::blend);
     feedforwardParam = apvts.getRawParameterValue (ParameterIDs::feedforward);
     feedbackParam    = apvts.getRawParameterValue (ParameterIDs::feedback);
+
+    // Cache modulation pointers
+    modEnableParam    = apvts.getRawParameterValue (ParameterIDs::modEnable);
+    modTypeParam      = apvts.getRawParameterValue (ParameterIDs::modType);
+    modDepthParam     = apvts.getRawParameterValue (ParameterIDs::modDepth);
+    modFrequencyParam = apvts.getRawParameterValue (ParameterIDs::modFrequency);
 }
 
 AudioPluginAudioProcessor::~AudioPluginAudioProcessor()
@@ -92,14 +98,13 @@ void AudioPluginAudioProcessor::changeProgramName (int index, const juce::String
 //==============================================================================
 void AudioPluginAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // 3. Prepare DSP filter buffer allocation on main thread
+    // Prepare DSP filter buffer allocation on main thread
     combFilter.prepare (sampleRate, samplesPerBlock, getTotalNumInputChannels());
 }
 
 void AudioPluginAudioProcessor::releaseResources()
 {
-    // When playback stops, you can use this as an opportunity to free up any
-    // spare memory, etc.
+    // When playback stops, free up memory
     combFilter.reset();
 }
 
@@ -139,10 +144,17 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
+    // Update base parameters
     combFilter.setDelayMs           (delayParam       ? delayParam->load()       : 10.0f);
     combFilter.setBlend             (blendParam       ? blendParam->load()       : 1.0f);
     combFilter.setFeedforward       (feedforwardParam ? feedforwardParam->load() : 0.5f);
     combFilter.setFeedback          (feedbackParam    ? feedbackParam->load()    : 0.0f);
+
+    // Update modulation parameters
+    combFilter.setModEnabled        (modEnableParam    ? modEnableParam->load() > 0.5f : false);
+    combFilter.setModType           (modTypeParam      ? static_cast<int>(modTypeParam->load()) : 0);
+    combFilter.setModDepthMs        (modDepthParam     ? modDepthParam->load() : 0.0f);
+    combFilter.setModFrequencyHz    (modFrequencyParam ? modFrequencyParam->load() : 1.0f);
 
     // Process available input channels
     combFilter.processBlock (buffer);
@@ -168,7 +180,7 @@ juce::AudioProcessorEditor* AudioPluginAudioProcessor::createEditor()
 //==============================================================================
 void AudioPluginAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    // 5. Save parameter state
+    // Save parameter state
     auto state = apvts.copyState();
     std::unique_ptr<juce::XmlElement> xml (state.createXml());
     copyXmlToBinary (*xml, destData);
@@ -176,7 +188,7 @@ void AudioPluginAudioProcessor::getStateInformation (juce::MemoryBlock& destData
 
 void AudioPluginAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    // 5. Restore parameter state
+    // Restore parameter state
     std::unique_ptr<juce::XmlElement> xmlState (getXmlFromBinary (data, sizeInBytes));
 
     if (xmlState.get() != nullptr)

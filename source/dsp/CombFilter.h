@@ -3,6 +3,7 @@
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <juce_dsp/juce_dsp.h>
 #include <vector>
+#include "Modulator.h"
 
 class CombFilter
 {
@@ -24,17 +25,26 @@ public:
     void setFeedforward(float newFeedforward);
     void setFeedback(float newFeedback);
 
+    // Modulation Setters
+    void setModEnabled(bool enabled);
+    void setModType(int typeIndex);
+    void setModDepthMs(float depthMs);
+    void setModFrequencyHz(float freqHz);
+
 private:
     double currentSampleRate { 44100.0 };
-    
+
     // Smoothed values prevent clicking when tweaking knobs live
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedDelayMs;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedBlend;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedFeedforward;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedFeedback;
 
+    bool modEnabled { false };
+    Modulator modulator;
+
     // Fractional delay line per channel using Lagrange 3rd order interpolation
     std::vector<juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::Lagrange3rd>> delayLines;
-
+    
     static constexpr float maxDelayMs = 100.0f;
 };

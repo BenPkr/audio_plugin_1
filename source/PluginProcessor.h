@@ -5,7 +5,7 @@
 #include "dsp/CombFilter.h"
 
 //==============================================================================
-class AudioPluginAudioProcessor final : public juce::AudioProcessor
+class AudioPluginAudioProcessor  : public juce::AudioProcessor
 {
 public:
     //==============================================================================
@@ -16,9 +16,7 @@ public:
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
 
-   #ifndef JucePlugin_PreferredChannelConfigurations
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
-   #endif
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
@@ -45,18 +43,25 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    // Public access to APVTS for Editor attachments
+    // --- Added for parameters ---
     juce::AudioProcessorValueTreeState apvts;
 
 private:
-//==============================================================================
+    // --- Added for DSP processing ---
     CombFilter combFilter;
 
-    // Cached raw parameter pointers for fast, thread-safe access in processBlock
-    std::atomic<float>* delayParam      = nullptr;
-    std::atomic<float>* blendParam      = nullptr;
+    // Base parameter pointers
+    std::atomic<float>* delayParam       = nullptr;
+    std::atomic<float>* blendParam       = nullptr;
     std::atomic<float>* feedforwardParam = nullptr;
-    std::atomic<float>* feedbackParam   = nullptr;
+    std::atomic<float>* feedbackParam    = nullptr;
 
+    // Modulation parameter pointers
+    std::atomic<float>* modEnableParam    = nullptr;
+    std::atomic<float>* modTypeParam      = nullptr;
+    std::atomic<float>* modDepthParam     = nullptr;
+    std::atomic<float>* modFrequencyParam = nullptr;
+
+    //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessor)
 };

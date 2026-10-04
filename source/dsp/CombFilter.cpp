@@ -21,6 +21,9 @@ void CombFilter::prepare(double sampleRate, int samplesPerBlock, int numChannels
     smoothedFeedforward.setCurrentAndTargetValue(0.5f);
     smoothedFeedback.setCurrentAndTargetValue(0.0f);
 
+    // Prepare modulation generator
+    modulator.prepare(sampleRate);
+
     // 2. Size and prepare delay lines
     const auto maxDelaySamples = static_cast<int>(std::ceil((maxDelayMs / 1000.0f) * currentSampleRate));
 
@@ -44,6 +47,8 @@ void CombFilter::reset()
     smoothedFeedforward.reset(currentSampleRate, 0.020f);
     smoothedFeedback.reset(currentSampleRate, 0.020f);
 
+    modulator.reset();
+
     for (auto& delayLine : delayLines)
         delayLine.reset();
 }
@@ -52,6 +57,11 @@ void CombFilter::setDelayMs(float newDelayMs)           { smoothedDelayMs.setTar
 void CombFilter::setBlend(float newBlend)               { smoothedBlend.setTargetValue(juce::jlimit(-1.0f, 1.0f, newBlend)); }
 void CombFilter::setFeedforward(float newFeedforward)   { smoothedFeedforward.setTargetValue(juce::jlimit(-1.0f, 1.0f, newFeedforward)); }
 void CombFilter::setFeedback(float newFeedback)         { smoothedFeedback.setTargetValue(juce::jlimit(-0.99f, 0.99f, newFeedback)); }
+
+void CombFilter::setModEnabled(bool enabled)        { modEnabled = enabled; }
+void CombFilter::setModType(int typeIndex)         { modulator.setType(static_cast<Modulator::Type>(typeIndex)); }
+void CombFilter::setModDepthMs(float depthMs)       { modulator.setDepthMs(depthMs); }
+void CombFilter::setModFrequencyHz(float freqHz)   { modulator.setFrequency(freqHz); }
 
 void CombFilter::processBlock(juce::AudioBuffer<float>& buffer)
 {
@@ -73,7 +83,10 @@ void CombFilter::processBlock(juce::AudioBuffer<float>& buffer)
         const float curFeedforward = smoothedFeedforward.getNextValue();
         const float curFeedback    = smoothedFeedback.getNextValue();
 
-        const float curDelaySamples = (curDelayMs / 1000.0f) * static_cast<float>(currentSampleRate);
+        // Compute instant modulation offset per sample frame
+        const float modOffsetMs = modEnabled ? modulator.processSample() : 0.0f;
+        const float totalDelayMs = juce::jlimit(0.1f, maxDelayMs, curDelayMs + modOffsetMs);
+        const float curDelaySamples = (totalDelayMs / 1000.0f) * static_cast<float>(currentSampleRate);
 
         for (int channel = 0; channel < numChannels; ++channel)
         {
@@ -83,7 +96,7 @@ void CombFilter::processBlock(juce::AudioBuffer<float>& buffer)
             auto& delayLine = delayLines[static_cast<size_t>(channel)];
             delayLine.setDelay(curDelaySamples);
 
-            // FIX HERE: Pass 0 as the channel index to the single-channel delayLine object
+            // Pass 0 as the channel index to the single-channel delayLine object
             const float xh_delayed = delayLine.popSample(0);
 
             // Universal comb filter difference equations:
