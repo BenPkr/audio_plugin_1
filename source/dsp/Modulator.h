@@ -1,7 +1,6 @@
 #pragma once
 
 #include <juce_core/juce_core.h>
-#include <cmath>
 
 class Modulator
 {
@@ -9,71 +8,71 @@ public:
     enum class Type
     {
         Sine = 0,
-        LowpassNoise
+        LowpassNoise = 1
     };
 
     Modulator() = default;
 
-    void prepare(double sampleRate)
+    void prepare(double newSampleRate)
     {
-        currentSampleRate = sampleRate;
+        sampleRate = newSampleRate;
         reset();
     }
 
     void reset()
     {
-        sinePhase = 0.0f;
-        smoothedNoise = 0.0f;
+        phase = 0.0f;
+        rawNoiseState = 0.0f;
+        smoothedNoiseState = 0.0f;
     }
 
-    void setFrequency(float freqHz) { frequencyHz = freqHz; }
-    void setDepthMs(float depth)    { depthMs = depth; }
-    void setType(Type newType)      { type = newType; }
+    void setType(Type newType)          { type = newType; }
+    void setDepthMs(float newDepthMs)   { depthMs = newDepthMs; }
+    void setFrequency(float newFreqHz)  { frequencyHz = newFreqHz; }
 
-    /** Returns the current delay modulation offset in milliseconds for a single sample frame. */
     float processSample()
     {
-        if (depthMs <= 0.0f)
+        if (sampleRate <= 0.0)
             return 0.0f;
-
-        float modSignal = 0.0f;
 
         if (type == Type::Sine)
         {
-            modSignal = std::sin(sinePhase);
+            phase += (2.0f * static_cast<float>(M_PI) * frequencyHz) / static_cast<float>(sampleRate);
+            if (phase >= 2.0f * static_cast<float>(M_PI))
+                phase -= 2.0f * static_cast<float>(M_PI);
 
-            // Advance phase
-            const float phaseIncrement = (2.0f * static_cast<float>(M_PI) * frequencyHz) / static_cast<float>(currentSampleRate);
-            sinePhase += phaseIncrement;
-            if (sinePhase >= 2.0f * static_cast<float>(M_PI))
-                sinePhase -= 2.0f * static_cast<float>(M_PI);
+            return std::sin(phase) * depthMs;
         }
-        else if (type == Type::LowpassNoise)
+        else // Lowpass Noise Mode
         {
-            // Generate white noise bounded [-1, 1]
-            const float whiteNoise = random.nextFloat() * 2.0f - 1.0f;
+            // 1. Generate white noise sample
+            const float white = (random.nextFloat() * 2.0f) - 1.0f;
 
-            // One-pole lowpass filter tuned by frequency parameter
-            // Fc = frequencyHz
-            const float cutoff = juce::jlimit(0.1f, 100.0f, frequencyHz);
-            const float x = std::exp(-2.0f * static_cast<float>(M_PI) * cutoff / static_cast<float>(currentSampleRate));
-            const float alpha = 1.0f - x;
+            // 2. Heavy Lowpass Filter (Limit cutoff to max 3.0 Hz for smooth chorus gliding)
+            const float effectiveCutoff = juce::jlimit(0.1f, 3.0f, frequencyHz);
+            const float dt = 1.0f / static_cast<float>(sampleRate);
+            const float alpha = juce::jlimit(0.00001f, 0.1f, 2.0f * static_cast<float>(M_PI) * effectiveCutoff * dt);
 
-            smoothedNoise += alpha * (whiteNoise - smoothedNoise);
-            modSignal = smoothedNoise * 3.0f; // Scale up noise variance
+            rawNoiseState += alpha * (white - rawNoiseState);
+
+            // 3. Second-stage exponential smoother to eliminate sample-to-sample clicks/jitter
+            constexpr float smoothCoeff = 0.001f;
+            smoothedNoiseState += smoothCoeff * (rawNoiseState - smoothedNoiseState);
+
+            return juce::jlimit(-1.0f, 1.0f, smoothedNoiseState * 4.0f) * depthMs;
         }
-
-        return modSignal * depthMs;
     }
 
 private:
-    double currentSampleRate { 44100.0 };
-    float sinePhase { 0.0f };
-    float smoothedNoise { 0.0f };
-
-    float frequencyHz { 1.0f };
-    float depthMs { 0.0f };
+    double sampleRate { 44100.0 };
     Type type { Type::Sine };
+
+    float depthMs { 1.0f };
+    float frequencyHz { 1.0f };
+
+    float phase { 0.0f };
+    float rawNoiseState { 0.0f };
+    float smoothedNoiseState { 0.0f };
 
     juce::Random random;
 };

@@ -13,13 +13,12 @@ PresetPanel::PresetPanel (juce::AudioProcessorValueTreeState& apvts, Config conf
     setupSlider (feedbackSlider,    fbLabel,    "FB",  -0.99, 0.99, panelConfig.fbValue,  0.01, panelConfig.fbLocked);
     setupSlider (delaySlider,       delayLabel, "Dly", delayMin, delayMax, panelConfig.delayValue, 0.01, panelConfig.delayLocked);
 
-    // 2. Setup 3-Position Mod Type Knob (0: Off, 1: Sine, 2: Noise)
+    // 2. Setup 3-Position Mod Type Knob (0: Off, 1: Sin, 2: Noise)
     setupSlider (modTypeSlider, modTypeLabel, "Mod", 0.0, 2.0, static_cast<double>(panelConfig.modTypeMode), 1.0, panelConfig.modTypeLocked);
     
-    // Custom text display for 3-position mod knob
     modTypeSlider.textFromValueFunction = [](double val)
     {
-        const int mode = static_cast<int>(val);
+        const int mode = static_cast<int>(std::round(val));
         if (mode == 1) return juce::String("Sin");
         if (mode == 2) return juce::String("Noise");
         return juce::String("Off");
@@ -56,41 +55,36 @@ void PresetPanel::setupSlider (juce::Slider& slider, juce::Label& label, const j
 
 void PresetPanel::applyToAPVTS()
 {
-    auto setParam = [this](const char* paramID, float value)
-    {
-        if (auto* param = valueTreeState.getParameter(paramID))
-            param->setValueNotifyingHost(param->getValueForText(juce::String(value)));
-    };
-
-    setParam (ParameterIDs::blend,        static_cast<float>(blendSlider.getValue()));
-    setParam (ParameterIDs::feedforward,  static_cast<float>(feedforwardSlider.getValue()));
-    setParam (ParameterIDs::feedback,     static_cast<float>(feedbackSlider.getValue()));
-    setParam (ParameterIDs::delay,        static_cast<float>(delaySlider.getValue()));
-
-    // Explicit 3-Position Knob Mapping:
-    // 0 = Off   -> ModEnable = 0, ModType = 0 (Sine)
-    // 1 = Sin   -> ModEnable = 1, ModType = 0 (Sine)
-    // 2 = Noise -> ModEnable = 1, ModType = 1 (Noise)
     const int modMode = static_cast<int>(std::round(modTypeSlider.getValue()));
 
-    float enableVal = 0.0f;
-    float typeVal   = 0.0f;
+    // 1. Mod Enable Parameter (Bool: 0.0f or 1.0f)
+    if (auto* param = valueTreeState.getParameter(ParameterIDs::modEnable))
+        param->setValueNotifyingHost(modMode > 0 ? 1.0f : 0.0f);
 
-    if (modMode == 1) // Sine
+    // 2. Mod Type Parameter (Choice 0 = 0.0f [Sine], Choice 1 = 1.0f [Noise])
+    if (auto* param = valueTreeState.getParameter(ParameterIDs::modType))
     {
-        enableVal = 1.0f;
-        typeVal   = 0.0f; // Choice 0: Sine
-    }
-    else if (modMode == 2) // Lowpass Noise
-    {
-        enableVal = 1.0f;
-        typeVal   = 1.0f; // Choice 1: Lowpass Noise
+        const float normChoice = (modMode == 2) ? 1.0f : 0.0f;
+        param->setValueNotifyingHost(normChoice);
     }
 
-    setParam (ParameterIDs::modEnable,    enableVal);
-    setParam (ParameterIDs::modType,      typeVal);
-    setParam (ParameterIDs::modDepth,     static_cast<float>(modDepthSlider.getValue()));
-    setParam (ParameterIDs::modFrequency, static_cast<float>(modFrequencySlider.getValue()));
+    // 3. Helper for Continuous Float Parameters
+    auto setFloatParam = [this](const char* paramID, float rawVal)
+    {
+        if (auto* param = valueTreeState.getParameter(paramID))
+        {
+            // Convert value using APVTS parameter text parser
+            const float normVal = param->getValueForText(juce::String(rawVal));
+            param->setValueNotifyingHost(normVal);
+        }
+    };
+
+    setFloatParam (ParameterIDs::blend,        static_cast<float>(blendSlider.getValue()));
+    setFloatParam (ParameterIDs::feedforward,  static_cast<float>(feedforwardSlider.getValue()));
+    setFloatParam (ParameterIDs::feedback,     static_cast<float>(feedbackSlider.getValue()));
+    setFloatParam (ParameterIDs::delay,        static_cast<float>(delaySlider.getValue()));
+    setFloatParam (ParameterIDs::modDepth,     static_cast<float>(modDepthSlider.getValue()));
+    setFloatParam (ParameterIDs::modFrequency, static_cast<float>(modFrequencySlider.getValue()));
 }
 
 void PresetPanel::paint (juce::Graphics& g)
@@ -109,9 +103,9 @@ void PresetPanel::paint (juce::Graphics& g)
     g.setFont (juce::FontOptions (11.0f));
     g.drawText (panelConfig.title, bounds.removeFromTop (20), juce::Justification::centred, true);
 
-    // --- Draw Mod Group Box Outline ---
+    // --- Draw Modulation Group Box Outline ---
     auto modArea = getLocalBounds().reduced (4);
-    modArea.removeFromTop (105); // Move down below top row
+    modArea.removeFromTop (105);
     auto modBounds = modArea.toFloat();
 
     g.setColour (isEnabled() ? juce::Colours::cyan.withAlpha (0.3f) : juce::Colours::grey.withAlpha (0.2f));
@@ -124,7 +118,7 @@ void PresetPanel::paint (juce::Graphics& g)
 void PresetPanel::resized()
 {
     auto bounds = getLocalBounds().reduced (2);
-    bounds.removeFromTop (18); // Title space
+    bounds.removeFromTop (18);
 
     const int colW = bounds.getWidth() / 4;
 
@@ -141,13 +135,12 @@ void PresetPanel::resized()
     layoutKnobWithLabel (feedbackSlider,    fbLabel,    row1.removeFromLeft (colW));
     layoutKnobWithLabel (delaySlider,       delayLabel, row1.removeFromLeft (colW));
 
-    bounds.removeFromTop (14); // Space above Modulation Box
+    bounds.removeFromTop (14);
 
     // --- Row 2: Grouped Modulation Knobs (Mod Type, Depth, Rate) ---
     auto modRow = bounds.removeFromTop (80);
-    modRow.removeFromTop (10); // Gap for "MODULATION" inner header
+    modRow.removeFromTop (10);
 
-    // Center 3 knobs inside modulation box
     const int modColW = modRow.getWidth() / 3;
     layoutKnobWithLabel (modTypeSlider,      modTypeLabel, modRow.removeFromLeft (modColW));
     layoutKnobWithLabel (modDepthSlider,     depthLabel,   modRow.removeFromLeft (modColW));

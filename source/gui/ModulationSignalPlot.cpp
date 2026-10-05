@@ -23,9 +23,12 @@ ModulationSignalPlot::~ModulationSignalPlot()
 void ModulationSignalPlot::timerCallback()
 {
     const bool  enabled = modEnableParam    ? (modEnableParam->load() > 0.5f) : false;
-    const int   type    = modTypeParam      ? static_cast<int>(modTypeParam->load()) : 0;
+    const float typeVal = modTypeParam      ? modTypeParam->load() : 0.0f;
     const float depth   = modDepthParam     ? modDepthParam->load()     : 0.0f;
     const float freq    = modFrequencyParam ? modFrequencyParam->load() : 1.0f;
+
+    // Explicit Threshold: > 0.5f forces Lowpass Noise Mode
+    const int type = (typeVal > 0.5f) ? 1 : 0;
 
     constexpr float dt = 0.033f; // ~33ms timer step
     guiPhaseTime += dt;
@@ -34,11 +37,11 @@ void ModulationSignalPlot::timerCallback()
 
     if (enabled && depth > 0.0f)
     {
-        if (type == 0) // Sine
+        if (type == 0) // Sine LFO
         {
             currentVal = std::sin(2.0f * static_cast<float>(M_PI) * freq * guiPhaseTime);
         }
-        else // Lowpass Noise simulation
+        else // Lowpass Noise Mode
         {
             const float white = random.nextFloat() * 2.0f - 1.0f;
             const float cutoff = juce::jlimit(0.1f, 20.0f, freq);
@@ -62,25 +65,24 @@ void ModulationSignalPlot::paint(juce::Graphics& g)
     g.setColour(juce::Colours::darkgrey);
     g.drawRect(getLocalBounds(), 1);
 
-    // REMOVED 'const' HERE so removeFromTop can mutate bounds
     auto bounds = getLocalBounds().toFloat().reduced(4.0f);
     if (bounds.isEmpty())
         return;
 
-    // Title overlay (mutates bounds, removing 16px from the top)
+    // Title Overlay
     g.setColour(juce::Colours::lightgrey);
-    g.setFont(11.0f);
+    g.setFont(juce::FontOptions(11.0f));
     g.drawText("Modulation Signal (Time-Domain)", bounds.removeFromTop(16.0f), juce::Justification::left, false);
 
     const float centerY = bounds.getCentreY();
 
-    // Center baseline
+    // Center Baseline
     g.setColour(juce::Colours::grey.withAlpha(0.3f));
     g.drawHorizontalLine(static_cast<int>(centerY), bounds.getX(), bounds.getRight());
 
     const bool enabled = modEnableParam ? (modEnableParam->load() > 0.5f) : false;
 
-    // Draw waveform path
+    // Draw Waveform Path
     juce::Path wavePath;
     const float halfHeight = (bounds.getHeight() * 0.45f);
 
