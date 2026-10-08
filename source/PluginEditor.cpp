@@ -40,19 +40,18 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
     modeDialLabel.attachToComponent (&modeDial, false);
     addAndMakeVisible (modeDialLabel);
 
+    // Setup Tame / Moorer Toggle Switches & Attach to APVTS
+    addAndMakeVisible (autoGainButton);
+    addAndMakeVisible (dampingButton);
+
+    autoGainAttachment = std::make_unique<ButtonAttachment> (p.apvts, ParameterIDs::autoGain, autoGainButton);
+    dampingAttachment  = std::make_unique<ButtonAttachment> (p.apvts, ParameterIDs::damping,  dampingButton);
+
     // Build Zölzer preset panel configurations (ModMode: 0 = Off, 1 = Sine, 2 = Noise)
     PresetPanel::Config customCfg  { "CUSTOM (FREE)", {0.1, 100.0, 10.0}, {0.0, 30.0, 1.0}, {0.05, 20.0, 1.0} };
-    
-    // Vibrato: BL=0 (locked), FF=1 (locked), FB=0 (locked), Sine LFO (ModMode=1)[cite: 1]
     PresetPanel::Config vibCfg     { "VIBRATO", {0.1, 5.0, 0.1}, {0.0, 3.0, 2.0}, {0.1, 5.0, 2.0}, 0.0f, true, 1.0f, true, 0.0f, true, 0.1f, false, 1, true };
-    
-    // Flanger: BL=0.7 (locked), FF=0.7 (locked), FB=0.7 (locked), Sine LFO (ModMode=1)[cite: 1]
     PresetPanel::Config flangCfg   { "FLANGER", {0.1, 5.0, 0.1}, {0.0, 2.0, 1.5}, {0.1, 1.0, 0.5}, 0.7f, true, 0.7f, true, 0.7f, true, 0.1f, false, 1, true };
-    
-    // Chorus: BL=0.7 (locked), FF=1.0 (locked), FB=-0.7 (locked), Noise LFO (ModMode=2)[cite: 1]
     PresetPanel::Config chorusCfg  { "CHORUS", {1.0, 30.0, 15.0}, {1.0, 30.0, 10.0}, {0.1, 5.0, 1.0}, 0.7f, true, 1.0f, true, -0.7f, true, 15.0f, false, 2, true };
-    
-    // Doubling: BL=0.7 (locked), FF=0.7 (locked), FB=0 (locked), Noise LFO (ModMode=2)[cite: 1]
     PresetPanel::Config doubleCfg  { "DOUBLING", {10.0, 100.0, 30.0}, {1.0, 100.0, 15.0}, {0.1, 5.0, 0.5}, 0.7f, true, 0.7f, true, 0.0f, true, 30.0f, false, 2, true };
 
     customPanel   = std::make_unique<PresetPanel> (p.apvts, customCfg);
@@ -108,12 +107,17 @@ void AudioPluginAudioProcessorEditor::resized()
     auto bounds = getLocalBounds().reduced (10);
     bounds.removeFromTop (25);
 
-    // --- Top Header: Mode Dial + Oscilloscope ---
-    auto headerArea = bounds.removeFromTop (125);
+    // --- Top Header: Mode Dial + Toggles + Oscilloscope ---
+    auto headerArea = bounds.removeFromTop (135);
     
-    auto dialArea = headerArea.removeFromLeft (110);
-    modeDialLabel.setBounds (dialArea.removeFromTop (16));
-    modeDial.setBounds (dialArea);
+    // Left Header Column (Mode Dial + Toggle Buttons)
+    auto leftHeader = headerArea.removeFromLeft (130);
+    modeDialLabel.setBounds (leftHeader.removeFromTop (16));
+    modeDial.setBounds (leftHeader.removeFromTop (65));
+    
+    leftHeader.removeFromTop (4); // Spacing gap
+    autoGainButton.setBounds (leftHeader.removeFromTop (22));
+    dampingButton.setBounds  (leftHeader.removeFromTop (22));
 
     headerArea.removeFromLeft (10); // Spacing gap
     modulationSignalPlot.setBounds (headerArea);

@@ -1,25 +1,24 @@
 #include "FrequencyResponsePlot.h"
-#include "../dsp/CombMath.h"
 #include "../Parameters.h"
 #include <cmath>
+#include <complex>
 
-FrequencyResponsePlot::FrequencyResponsePlot(juce::AudioProcessorValueTreeState& apvts)
-    : valueTreeState(apvts)
+FrequencyResponsePlot::FrequencyResponsePlot (juce::AudioProcessorValueTreeState& apvts)
+    : valueTreeState (apvts)
 {
-    delayParam       = valueTreeState.getRawParameterValue(ParameterIDs::delay);
-    blendParam       = valueTreeState.getRawParameterValue(ParameterIDs::blend);
-    feedforwardParam = valueTreeState.getRawParameterValue(ParameterIDs::feedforward);
-    feedbackParam    = valueTreeState.getRawParameterValue(ParameterIDs::feedback);
+    delayParam        = valueTreeState.getRawParameterValue (ParameterIDs::delay);
+    blendParam        = valueTreeState.getRawParameterValue (ParameterIDs::blend);
+    feedforwardParam  = valueTreeState.getRawParameterValue (ParameterIDs::feedforward);
+    feedbackParam     = valueTreeState.getRawParameterValue (ParameterIDs::feedback);
+    autoGainParam     = valueTreeState.getRawParameterValue (ParameterIDs::autoGain);
+    dampingParam      = valueTreeState.getRawParameterValue (ParameterIDs::damping);
 
-    modEnableParam    = valueTreeState.getRawParameterValue(ParameterIDs::modEnable);
-    modTypeParam      = valueTreeState.getRawParameterValue(ParameterIDs::modType);
-    modDepthParam     = valueTreeState.getRawParameterValue(ParameterIDs::modDepth);
-    modFrequencyParam = valueTreeState.getRawParameterValue(ParameterIDs::modFrequency);
+    modEnableParam    = valueTreeState.getRawParameterValue (ParameterIDs::modEnable);
+    modTypeParam      = valueTreeState.getRawParameterValue (ParameterIDs::modType);
+    modDepthParam     = valueTreeState.getRawParameterValue (ParameterIDs::modDepth);
+    modFrequencyParam = valueTreeState.getRawParameterValue (ParameterIDs::modFrequency);
 
-    magnitudeDb.resize(numPlotPoints, 0.0f);
-
-    // Start timer at ~30 FPS (33ms)
-    startTimer(33);
+    startTimer (33); // ~30 FPS refresh rate
 }
 
 FrequencyResponsePlot::~FrequencyResponsePlot()
@@ -29,124 +28,121 @@ FrequencyResponsePlot::~FrequencyResponsePlot()
 
 void FrequencyResponsePlot::timerCallback()
 {
-    const float curDelay = delayParam       ? delayParam->load()       : 10.0f;
-    const float curBlend = blendParam       ? blendParam->load()       : 1.0f;
-    const float curFF    = feedforwardParam ? feedforwardParam->load() : 0.5f;
-    const float curFB    = feedbackParam    ? feedbackParam->load()    : 0.0f;
+    // Advance LFO state for GUI visualization frame (~33ms steps)
+    constexpr float dt = 0.033f;
+    const float modFreq  = modFrequencyParam ? modFrequencyParam->load() : 1.0f;
+    const float modType  = modTypeParam      ? modTypeParam->load()      : 0.0f;
 
-    const bool  curModEnable = modEnableParam    ? (modEnableParam->load() > 0.5f) : false;
-    const int   curModType   = modTypeParam      ? static_cast<int>(modTypeParam->load()) : 0;
-    const float curModDepth  = modDepthParam     ? modDepthParam->load()     : 0.0f;
-    const float curModFreq   = modFrequencyParam ? modFrequencyParam->load() : 1.0f;
-
-    constexpr float threshold = 1e-5f;
-
-    // Advance GUI phase clock by ~33ms
-    const float timerIntervalSec = 0.033f;
-    guiPhaseTime += timerIntervalSec;
-
-    // Check if parameters changed or if modulation is actively running
-    const bool paramsChanged = (std::abs(curDelay - lastDelay) > threshold ||
-                               std::abs(curBlend - lastBlend) > threshold ||
-                               std::abs(curFF    - lastFF)    > threshold ||
-                               std::abs(curFB    - lastFB)    > threshold ||
-                               std::abs(curModDepth - lastModDepth) > threshold ||
-                               std::abs(curModFreq  - lastModFreq)  > threshold ||
-                               curModType != lastModType ||
-                               curModEnable != lastModEnable);
-
-    // Force recalculation every frame if modulation is enabled
-    if (paramsChanged || (curModEnable && curModDepth > 0.0f))
+    if (modType < 0.5f) // Sine
     {
-        lastDelay     = curDelay;
-        lastBlend     = curBlend;
-        lastFF        = curFF;
-        lastFB        = curFB;
-        lastModEnable = curModEnable;
-        lastModType   = curModType;
-        lastModDepth  = curModDepth;
-        lastModFreq   = curModFreq;
-
-        recalculateResponse();
-        repaint();
+        guiPhase += 2.0f * static_cast<float> (M_PI) * modFreq * dt;
+        if (guiPhase >= 2.0f * static_cast<float> (M_PI))
+            guiPhase -= 2.0f * static_cast<float> (M_PI);
     }
+    else // Lowpass Noise
+    {
+        const float white = (random.nextFloat() * 2.0f) - 1.0f;
+        const float alpha = juce::jlimit (0.01f, 0.5f, 2.0f * static_cast<float> (M_PI) * modFreq * dt);
+        guiNoiseState += alpha * (white - guiNoiseState);
+    }
+
+    repaint();
 }
 
-void FrequencyResponsePlot::recalculateResponse()
+void FrequencyResponsePlot::paint (juce::Graphics& g)
 {
-    constexpr float sampleRate = 44100.0f;
+    g.fillAll (juce::Colours::black.withAlpha (0.85f));
+    g.setColour (juce::Colours::darkgrey);
+    g.drawRect (getLocalBounds(), 1);
 
-    // Calculate instantaneous modulation offset
-    float modOffsetMs = 0.0f;
-
-    if (lastModEnable && lastModDepth > 0.0f)
-    {
-        if (lastModType == 0) // Sine LFO
-        {
-            modOffsetMs = std::sin(2.0f * static_cast<float>(M_PI) * lastModFreq * guiPhaseTime) * lastModDepth;
-        }
-        else // Lowpass Noise approximation
-        {
-            // Simple multi-sine pseudo-random summation for GUI display smoothness
-            const float noiseSim = 0.6f * std::sin(2.0f * static_cast<float>(M_PI) * lastModFreq * guiPhaseTime)
-                                 + 0.4f * std::sin(2.0f * static_cast<float>(M_PI) * (lastModFreq * 2.3f) * guiPhaseTime);
-            modOffsetMs = noiseSim * lastModDepth;
-        }
-    }
-
-    const float effectiveDelayMs = juce::jlimit(0.1f, 100.0f, lastDelay + modOffsetMs);
-    const float delaySamples = (effectiveDelayMs / 1000.0f) * sampleRate;
-
-    for (int i = 0; i < numPlotPoints; ++i)
-    {
-        const float normIndex = static_cast<float>(i) / static_cast<float>(numPlotPoints - 1);
-        const float freqHz = 20.0f * std::pow(20000.0f / 20.0f, normIndex);
-        const float omega = (2.0f * static_cast<float>(M_PI) * freqHz) / sampleRate;
-
-        const auto H = CombMath::evaluateTransferFunction(omega, delaySamples, lastBlend, lastFF, lastFB);
-        const float mag = std::abs(H);
-
-        float db = (mag > 1e-5f) ? 20.0f * std::log10(mag) : -100.0f;
-        magnitudeDb[static_cast<size_t>(i)] = juce::jlimit(-24.0f, 24.0f, db);
-    }
-}
-
-void FrequencyResponsePlot::paint(juce::Graphics& g)
-{
-    g.fillAll(juce::Colours::black.withAlpha(0.8f));
-    g.setColour(juce::Colours::darkgrey);
-    g.drawRect(getLocalBounds(), 1);
-
-    const auto bounds = getLocalBounds().toFloat().reduced(4.0f);
+    auto bounds = getLocalBounds().toFloat().reduced (4.0f);
     if (bounds.isEmpty())
         return;
 
-    // Draw grid lines (-12 dB, 0 dB, +12 dB)
-    g.setColour(juce::Colours::grey.withAlpha(0.3f));
-    const float y0dB   = juce::jmap(0.0f,   -24.0f, 24.0f, bounds.getBottom(), bounds.getY());
-    const float y12dB  = juce::jmap(12.0f,  -24.0f, 24.0f, bounds.getBottom(), bounds.getY());
-    const float y_12dB = juce::jmap(-12.0f, -24.0f, 24.0f, bounds.getBottom(), bounds.getY());
+    // Header Title
+    g.setColour (juce::Colours::lightgrey);
+    g.setFont (juce::FontOptions (11.0f));
+    g.drawText ("Frequency Response (Magnitude)", bounds.removeFromTop (16.0f), juce::Justification::left, false);
 
-    g.drawHorizontalLine(static_cast<int>(y0dB),   bounds.getX(), bounds.getRight());
-    g.drawHorizontalLine(static_cast<int>(y12dB),  bounds.getX(), bounds.getRight());
-    g.drawHorizontalLine(static_cast<int>(y_12dB), bounds.getX(), bounds.getRight());
+    const float delayMs    = delayParam       ? delayParam->load()       : 10.0f;
+    const float BL         = blendParam       ? blendParam->load()       : 1.0f;
+    const float FF         = feedforwardParam ? feedforwardParam->load() : 0.5f;
+    const float FB         = feedbackParam    ? feedbackParam->load()    : 0.0f;
+    const bool  autoGainOn = autoGainParam    ? (autoGainParam->load() > 0.5f) : true;
+    const bool  dampingOn  = dampingParam     ? (dampingParam->load() > 0.5f)  : true;
 
-    // Construct response path
-    juce::Path responsePath;
-    for (size_t i = 0; i < magnitudeDb.size(); ++i)
+    const bool  modOn      = modEnableParam   ? (modEnableParam->load() > 0.5f) : false;
+    const float modType    = modTypeParam     ? modTypeParam->load()            : 0.0f;
+    const float modDepth   = modDepthParam    ? modDepthParam->load()           : 0.0f;
+
+    // Calculate instantaneous modulated delay offset
+    float modOffsetMs = 0.0f;
+    if (modOn)
     {
-        const float x = bounds.getX() + (static_cast<float>(i) / static_cast<float>(numPlotPoints - 1)) * bounds.getWidth();
-        const float y = juce::jmap(magnitudeDb[i], -24.0f, 24.0f, bounds.getBottom(), bounds.getY());
-
-        if (i == 0)
-            responsePath.startNewSubPath(x, y);
+        if (modType < 0.5f)
+            modOffsetMs = std::sin (guiPhase) * modDepth;
         else
-            responsePath.lineTo(x, y);
+            modOffsetMs = guiNoiseState * modDepth;
     }
 
-    // Change curve color to vibrant magenta/pink when modulation is active to indicate motion
-    g.setColour(lastModEnable && lastModDepth > 0.0f ? juce::Colours::magenta : juce::Colours::cyan);
-    g.strokePath(responsePath, juce::PathStrokeType(2.0f));
+    const float totalDelayMs = juce::jlimit (0.1f, 100.0f, delayMs + modOffsetMs);
+
+    // L2 Normalization factor
+    const float absFb = std::abs (FB);
+    const float normScale = autoGainOn ? std::sqrt (1.0f - (absFb * absFb)) : 1.0f;
+
+    // Sample rate & delay in samples
+    constexpr double fs = 44100.0;
+    const double delaySamples = (totalDelayMs / 1000.0) * fs;
+
+    juce::Path responsePath;
+    const int numPixels = static_cast<int> (bounds.getWidth());
+    constexpr float minDb = -24.0f;
+    constexpr float maxDb =  24.0f;
+
+    for (int i = 0; i < numPixels; ++i)
+    {
+        const float normX = static_cast<float> (i) / static_cast<float> (numPixels - 1);
+        const double freq = 20.0 * std::pow (1000.0, normX);
+        const double omega = 2.0 * M_PI * freq / fs;
+
+        const std::complex<double> z_inv_M = std::polar (1.0, -omega * delaySamples);
+
+        constexpr double dampingCoeff = 0.25;
+        std::complex<double> H_feedback = 1.0;
+
+        if (dampingOn)
+        {
+            const std::complex<double> z_inv = std::polar (1.0, -omega);
+            H_feedback = (1.0 - dampingCoeff) / (1.0 - (dampingCoeff * z_inv));
+        }
+
+        const std::complex<double> numerator   = (static_cast<double> (BL * normScale)) + (static_cast<double> (FF) * z_inv_M);
+        const std::complex<double> denominator = 1.0 - (static_cast<double> (FB) * H_feedback * z_inv_M);
+
+        const std::complex<double> H = numerator / denominator;
+        const double mag = std::abs (H);
+
+        const float db = static_cast<float> (20.0 * std::log10 (std::max (mag, 1e-5)));
+
+        const float normY = juce::jlimit (0.0f, 1.0f, (db - minDb) / (maxDb - minDb));
+        const float y = bounds.getBottom() - (normY * bounds.getHeight());
+        const float x = bounds.getX() + static_cast<float> (i);
+
+        if (i == 0)
+            responsePath.startNewSubPath (x, y);
+        else
+            responsePath.lineTo (x, y);
+    }
+
+    // Grid lines (0 dB center)
+    g.setColour (juce::Colours::grey.withAlpha (0.25f));
+    const float zeroDbY = bounds.getBottom() - (((0.0f - minDb) / (maxDb - minDb)) * bounds.getHeight());
+    g.drawHorizontalLine (static_cast<int> (zeroDbY), bounds.getX(), bounds.getRight());
+
+    // Draw Frequency Curve
+    g.setColour (juce::Colours::cyan);
+    g.strokePath (responsePath, juce::PathStrokeType (1.8f));
 }
 
 void FrequencyResponsePlot::resized() {}
