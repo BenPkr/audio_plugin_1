@@ -8,7 +8,7 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
                       #if ! JucePlugin_IsSynth
                        .withInput  ("Input",  juce::AudioChannelSet::mono(), true)
                       #endif
-                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+                       .withOutput ("Output", juce::AudioChannelSet::mono(), true)
                      #endif
                        ),
        apvts (*this, nullptr, "Parameters", createParameterLayout())
@@ -121,18 +121,8 @@ bool AudioPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layou
     const auto mainInput  = layouts.getMainInputChannelSet();
     const auto mainOutput = layouts.getMainOutputChannelSet();
 
-    // 1. Must be Mono or Stereo
-    if (mainOutput != juce::AudioChannelSet::mono() && mainOutput != juce::AudioChannelSet::stereo())
-        return false;
-
-    // 2. Allow Mono-In -> Mono-Out, Mono-In -> Stereo-Out, or Stereo-In -> Stereo-Out
-    if (mainInput == juce::AudioChannelSet::mono())
-        return true;
-
-    if (mainInput == juce::AudioChannelSet::stereo() && mainOutput == juce::AudioChannelSet::stereo())
-        return true;
-
-    return false;
+    return mainInput == juce::AudioChannelSet::mono()
+        && mainOutput == juce::AudioChannelSet::mono();
   #endif
 }
 
@@ -142,11 +132,6 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     juce::ignoreUnused (midiMessages);
 
     juce::ScopedNoDenormals noDenormals;
-    auto totalNumInputChannels  = getTotalNumInputChannels();
-    auto totalNumOutputChannels = getTotalNumOutputChannels();
-
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
 
     // Update base parameters
     combFilter.setDelayMs           (delayParam       ? delayParam->load()       : 10.0f);
@@ -166,12 +151,6 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     // Process available input channels
     combFilter.processBlock (buffer);
-
-    // If input is mono (Mic on ch 1) but output is stereo, duplicate left to right channel
-    if (totalNumInputChannels == 1 && totalNumOutputChannels == 2)
-    {
-        buffer.copyFrom (1, 0, buffer, 0, 0, buffer.getNumSamples());
-    }
 }
 
 //==============================================================================
