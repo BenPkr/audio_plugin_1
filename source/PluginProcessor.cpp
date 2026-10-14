@@ -13,11 +13,15 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
                        ),
        apvts (*this, nullptr, "Parameters", createParameterLayout())
 {
-    // Cache raw pointers to avoid string lookups on the audio thread
+    // Cache base parameter pointers
     delayParam       = apvts.getRawParameterValue (ParameterIDs::delay);
     blendParam       = apvts.getRawParameterValue (ParameterIDs::blend);
     feedforwardParam = apvts.getRawParameterValue (ParameterIDs::feedforward);
     feedbackParam    = apvts.getRawParameterValue (ParameterIDs::feedback);
+
+    // Cache Tame / Moorer toggle parameter pointers
+    autoGainParam    = apvts.getRawParameterValue (ParameterIDs::autoGain);
+    dampingParam     = apvts.getRawParameterValue (ParameterIDs::damping);
 
     // Cache modulation pointers
     modEnableParam    = apvts.getRawParameterValue (ParameterIDs::modEnable);
@@ -150,9 +154,13 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     combFilter.setFeedforward       (feedforwardParam ? feedforwardParam->load() : 0.5f);
     combFilter.setFeedback          (feedbackParam    ? feedbackParam->load()    : 0.0f);
 
-    // Update modulation parameters
+    // Update Tame / Moorer toggle parameters
+    combFilter.setAutoGainEnabled   (autoGainParam    ? autoGainParam->load() > 0.5f : true);
+    combFilter.setDampingEnabled    (dampingParam     ? dampingParam->load() > 0.5f  : true);
+
+    // Update modulation parameters (using > 0.5f threshold for robust Choice parameter mapping)
     combFilter.setModEnabled        (modEnableParam    ? modEnableParam->load() > 0.5f : false);
-    combFilter.setModType           (modTypeParam      ? static_cast<int>(modTypeParam->load()) : 0);
+    combFilter.setModType           (modTypeParam      ? (modTypeParam->load() > 0.5f ? 1 : 0) : 0);
     combFilter.setModDepthMs        (modDepthParam     ? modDepthParam->load() : 0.0f);
     combFilter.setModFrequencyHz    (modFrequencyParam ? modFrequencyParam->load() : 1.0f);
 
