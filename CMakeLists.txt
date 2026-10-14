@@ -89,6 +89,8 @@ target_sources(UniversalCombFilter
         source/dsp/Modulator.h
         source/gui/FrequencyResponsePlot.h
         source/gui/FrequencyResponsePlot.cpp
+        source/gui/PhaseResponsePlot.h
+        source/gui/PhaseResponsePlot.cpp
         source/gui/PoleZeroPlot.h
         source/gui/PoleZeroPlot.cpp
         source/gui/ModulationSignalPlot.h

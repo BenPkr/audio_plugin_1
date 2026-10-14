@@ -4,6 +4,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "gui/FrequencyResponsePlot.h"
+#include "gui/PhaseResponsePlot.h"
 #include "gui/PoleZeroPlot.h"
 #include "gui/ModulationSignalPlot.h"
 #include "gui/PresetPanel.h"
@@ -22,12 +23,17 @@ private:
 
     // Visualizations
     FrequencyResponsePlot frequencyResponsePlot;
+    PhaseResponsePlot phaseResponsePlot;
     PoleZeroPlot poleZeroPlot;
     ModulationSignalPlot modulationSignalPlot;
 
     // Mode Selector
     juce::Slider modeDial;
     juce::Label modeDialLabel;
+
+    // Tame/Moorer Toggles
+    juce::ToggleButton autoGainButton { "Auto Gain (L2)" };
+    juce::ToggleButton dampingButton  { "Damp Tail" };
 
     // 5 Dedicated Hardware Preset Panels
     std::unique_ptr<PresetPanel> customPanel;
@@ -36,8 +42,9 @@ private:
     std::unique_ptr<PresetPanel> chorusPanel;
     std::unique_ptr<PresetPanel> doublingPanel;
 
-    using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
-    std::unique_ptr<ComboBoxAttachment> presetAttachment;
+    using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
+    std::unique_ptr<ButtonAttachment> autoGainAttachment;
+    std::unique_ptr<ButtonAttachment> dampingAttachment;
 
     void updateActivePanel (int activeIndex);
 

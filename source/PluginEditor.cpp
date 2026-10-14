@@ -5,10 +5,12 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
     : AudioProcessorEditor (&p), 
       audioProcessor (p),
       frequencyResponsePlot (p.apvts),
+      phaseResponsePlot (p.apvts),           // <--- INITIALIZE
       poleZeroPlot (p.apvts),
       modulationSignalPlot (p.apvts)
 {
     addAndMakeVisible (frequencyResponsePlot);
+    addAndMakeVisible (phaseResponsePlot);   // <--- ADD TO GUI
     addAndMakeVisible (poleZeroPlot);
     addAndMakeVisible (modulationSignalPlot);
 
@@ -17,7 +19,6 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
     modeDial.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 18);
     modeDial.setRange (0, 4, 1);
     
-    // Map Mode Selector Dial numbers to explicit preset names
     modeDial.textFromValueFunction = [](double val)
     {
         const int mode = static_cast<int>(val);
@@ -40,19 +41,18 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
     modeDialLabel.attachToComponent (&modeDial, false);
     addAndMakeVisible (modeDialLabel);
 
-    // Build Zölzer preset panel configurations (ModMode: 0 = Off, 1 = Sine, 2 = Noise)
+    // Setup Tame / Moorer Toggle Switches
+    addAndMakeVisible (autoGainButton);
+    addAndMakeVisible (dampingButton);
+
+    autoGainAttachment = std::make_unique<ButtonAttachment> (p.apvts, ParameterIDs::autoGain, autoGainButton);
+    dampingAttachment  = std::make_unique<ButtonAttachment> (p.apvts, ParameterIDs::damping,  dampingButton);
+
+    // Build Preset Panels
     PresetPanel::Config customCfg  { "CUSTOM (FREE)", {0.1, 100.0, 10.0}, {0.0, 30.0, 1.0}, {0.05, 20.0, 1.0} };
-    
-    // Vibrato: BL=0 (locked), FF=1 (locked), FB=0 (locked), Sine LFO (ModMode=1)[cite: 1]
     PresetPanel::Config vibCfg     { "VIBRATO", {0.1, 5.0, 0.1}, {0.0, 3.0, 2.0}, {0.1, 5.0, 2.0}, 0.0f, true, 1.0f, true, 0.0f, true, 0.1f, false, 1, true };
-    
-    // Flanger: BL=0.7 (locked), FF=0.7 (locked), FB=0.7 (locked), Sine LFO (ModMode=1)[cite: 1]
     PresetPanel::Config flangCfg   { "FLANGER", {0.1, 5.0, 0.1}, {0.0, 2.0, 1.5}, {0.1, 1.0, 0.5}, 0.7f, true, 0.7f, true, 0.7f, true, 0.1f, false, 1, true };
-    
-    // Chorus: BL=0.7 (locked), FF=1.0 (locked), FB=-0.7 (locked), Noise LFO (ModMode=2)[cite: 1]
     PresetPanel::Config chorusCfg  { "CHORUS", {1.0, 30.0, 15.0}, {1.0, 30.0, 10.0}, {0.1, 5.0, 1.0}, 0.7f, true, 1.0f, true, -0.7f, true, 15.0f, false, 2, true };
-    
-    // Doubling: BL=0.7 (locked), FF=0.7 (locked), FB=0 (locked), Noise LFO (ModMode=2)[cite: 1]
     PresetPanel::Config doubleCfg  { "DOUBLING", {10.0, 100.0, 30.0}, {1.0, 100.0, 15.0}, {0.1, 5.0, 0.5}, 0.7f, true, 0.7f, true, 0.0f, true, 30.0f, false, 2, true };
 
     customPanel   = std::make_unique<PresetPanel> (p.apvts, customCfg);
@@ -70,7 +70,7 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
     updateActivePanel (0);
 
     setResizable (true, true);
-    setSize (900, 720);
+    setSize (1050, 720); // Slightly wider window to comfortably fit 3 middle plots
 }
 
 AudioPluginAudioProcessorEditor::~AudioPluginAudioProcessorEditor() {}
@@ -84,13 +84,13 @@ void AudioPluginAudioProcessorEditor::updateActivePanel (int activeIndex)
         if (i == activeIndex)
         {
             panels[i]->setEnabled (true);
-            panels[i]->setAlpha (1.0f);  // Fully lit & active
-            panels[i]->applyToAPVTS();   // Sync settings to DSP engine
+            panels[i]->setAlpha (1.0f);
+            panels[i]->applyToAPVTS();
         }
         else
         {
             panels[i]->setEnabled (false);
-            panels[i]->setAlpha (0.25f); // Greyed out & locked out
+            panels[i]->setAlpha (0.25f);
         }
     }
 }
@@ -108,24 +108,29 @@ void AudioPluginAudioProcessorEditor::resized()
     auto bounds = getLocalBounds().reduced (10);
     bounds.removeFromTop (25);
 
-    // --- Top Header: Mode Dial + Oscilloscope ---
-    auto headerArea = bounds.removeFromTop (125);
+    // --- Top Header: Mode Dial + Toggles + Oscilloscope ---
+    auto headerArea = bounds.removeFromTop (135);
     
-    auto dialArea = headerArea.removeFromLeft (110);
-    modeDialLabel.setBounds (dialArea.removeFromTop (16));
-    modeDial.setBounds (dialArea);
+    auto leftHeader = headerArea.removeFromLeft (130);
+    modeDialLabel.setBounds (leftHeader.removeFromTop (16));
+    modeDial.setBounds (leftHeader.removeFromTop (65));
+    
+    leftHeader.removeFromTop (4);
+    autoGainButton.setBounds (leftHeader.removeFromTop (22));
+    dampingButton.setBounds  (leftHeader.removeFromTop (22));
 
-    headerArea.removeFromLeft (10); // Spacing gap
+    headerArea.removeFromLeft (10);
     modulationSignalPlot.setBounds (headerArea);
 
     bounds.removeFromTop (12);
 
-    // --- Middle Section: Frequency Response & Pole-Zero Plots ---
+    // --- Middle Section: Frequency Response | Phase Response | Pole-Zero Plots ---
     auto plotArea = bounds.removeFromTop (170);
-    const int plotW = (plotArea.getWidth() - 10) / 2;
-    frequencyResponsePlot.setBounds (plotArea.removeFromLeft (plotW));
-    plotArea.removeFromLeft (10);
-    poleZeroPlot.setBounds (plotArea);
+    const int plotW = (plotArea.getWidth() - 20) / 3;
+
+    frequencyResponsePlot.setBounds (plotArea.removeFromLeft (plotW)); plotArea.removeFromLeft (10);
+    phaseResponsePlot.setBounds     (plotArea.removeFromLeft (plotW)); plotArea.removeFromLeft (10);
+    poleZeroPlot.setBounds          (plotArea);
 
     bounds.removeFromTop (15);
 

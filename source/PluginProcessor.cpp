@@ -8,16 +8,20 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
                       #if ! JucePlugin_IsSynth
                        .withInput  ("Input",  juce::AudioChannelSet::mono(), true)
                       #endif
-                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+                       .withOutput ("Output", juce::AudioChannelSet::mono(), true)
                      #endif
                        ),
        apvts (*this, nullptr, "Parameters", createParameterLayout())
 {
-    // Cache raw pointers to avoid string lookups on the audio thread
+    // Cache base parameter pointers
     delayParam       = apvts.getRawParameterValue (ParameterIDs::delay);
     blendParam       = apvts.getRawParameterValue (ParameterIDs::blend);
     feedforwardParam = apvts.getRawParameterValue (ParameterIDs::feedforward);
     feedbackParam    = apvts.getRawParameterValue (ParameterIDs::feedback);
+
+    // Cache Tame / Moorer toggle parameter pointers
+    autoGainParam    = apvts.getRawParameterValue (ParameterIDs::autoGain);
+    dampingParam     = apvts.getRawParameterValue (ParameterIDs::damping);
 
     // Cache modulation pointers
     modEnableParam    = apvts.getRawParameterValue (ParameterIDs::modEnable);
@@ -117,18 +121,8 @@ bool AudioPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layou
     const auto mainInput  = layouts.getMainInputChannelSet();
     const auto mainOutput = layouts.getMainOutputChannelSet();
 
-    // 1. Must be Mono or Stereo
-    if (mainOutput != juce::AudioChannelSet::mono() && mainOutput != juce::AudioChannelSet::stereo())
-        return false;
-
-    // 2. Allow Mono-In -> Mono-Out, Mono-In -> Stereo-Out, or Stereo-In -> Stereo-Out
-    if (mainInput == juce::AudioChannelSet::mono())
-        return true;
-
-    if (mainInput == juce::AudioChannelSet::stereo() && mainOutput == juce::AudioChannelSet::stereo())
-        return true;
-
-    return false;
+    return mainInput == juce::AudioChannelSet::mono()
+        && mainOutput == juce::AudioChannelSet::mono();
   #endif
 }
 
@@ -138,11 +132,6 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     juce::ignoreUnused (midiMessages);
 
     juce::ScopedNoDenormals noDenormals;
-    auto totalNumInputChannels  = getTotalNumInputChannels();
-    auto totalNumOutputChannels = getTotalNumOutputChannels();
-
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
 
     // Update base parameters
     combFilter.setDelayMs           (delayParam       ? delayParam->load()       : 10.0f);
@@ -150,20 +139,18 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     combFilter.setFeedforward       (feedforwardParam ? feedforwardParam->load() : 0.5f);
     combFilter.setFeedback          (feedbackParam    ? feedbackParam->load()    : 0.0f);
 
-    // Update modulation parameters
+    // Update Tame / Moorer toggle parameters
+    combFilter.setAutoGainEnabled   (autoGainParam    ? autoGainParam->load() > 0.5f : true);
+    combFilter.setDampingEnabled    (dampingParam     ? dampingParam->load() > 0.5f  : true);
+
+    // Update modulation parameters (using > 0.5f threshold for robust Choice parameter mapping)
     combFilter.setModEnabled        (modEnableParam    ? modEnableParam->load() > 0.5f : false);
-    combFilter.setModType           (modTypeParam      ? static_cast<int>(modTypeParam->load()) : 0);
+    combFilter.setModType           (modTypeParam      ? (modTypeParam->load() > 0.5f ? 1 : 0) : 0);
     combFilter.setModDepthMs        (modDepthParam     ? modDepthParam->load() : 0.0f);
     combFilter.setModFrequencyHz    (modFrequencyParam ? modFrequencyParam->load() : 1.0f);
 
     // Process available input channels
     combFilter.processBlock (buffer);
-
-    // If input is mono (Mic on ch 1) but output is stereo, duplicate left to right channel
-    if (totalNumInputChannels == 1 && totalNumOutputChannels == 2)
-    {
-        buffer.copyFrom (1, 0, buffer, 0, 0, buffer.getNumSamples());
-    }
 }
 
 //==============================================================================
