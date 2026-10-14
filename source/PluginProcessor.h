@@ -43,11 +43,11 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    // --- AudioProcessorValueTreeState ---
+    // --- Added for parameters ---
     juce::AudioProcessorValueTreeState apvts;
 
 private:
-    // --- DSP Processing Engine ---
+    // --- Added for DSP processing ---
     CombFilter combFilter;
 
     // Base parameter pointers
@@ -55,10 +55,6 @@ private:
     std::atomic<float>* blendParam       = nullptr;
     std::atomic<float>* feedforwardParam = nullptr;
     std::atomic<float>* feedbackParam    = nullptr;
-
-    // Tame / Moorer toggle parameter pointers
-    std::atomic<float>* autoGainParam    = nullptr;
-    std::atomic<float>* dampingParam     = nullptr;
 
     // Modulation parameter pointers
     std::atomic<float>* modEnableParam    = nullptr;
