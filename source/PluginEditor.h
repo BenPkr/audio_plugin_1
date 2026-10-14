@@ -4,6 +4,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "gui/FrequencyResponsePlot.h"
+#include "gui/PhaseResponsePlot.h"
 #include "gui/PoleZeroPlot.h"
 #include "gui/ModulationSignalPlot.h"
 #include "gui/PresetPanel.h"
@@ -22,6 +23,7 @@ private:
 
     // Visualizations
     FrequencyResponsePlot frequencyResponsePlot;
+    PhaseResponsePlot phaseResponsePlot;
     PoleZeroPlot poleZeroPlot;
     ModulationSignalPlot modulationSignalPlot;
 
