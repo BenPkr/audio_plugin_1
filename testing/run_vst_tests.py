@@ -32,6 +32,22 @@ def process_with_warmup(plugin_path, params, input_signal, warmup_samples=1024):
     output = plugin(input_buffer, sample_rate=SAMPLE_RATE)[0]
     return output[warmup_samples:]
 
+def format_time_domain_plot(ax, delay_ms=2.0, fs=SAMPLE_RATE):
+    """
+    Adds a secondary top X-axis showing time in milliseconds alongside sample index (n).
+    """
+    ax.set_xlabel("Sample Index (n)")
+    ax.grid(True, alpha=0.3)
+    
+    # Create secondary top axis for Time (ms)
+    ax_top = ax.secondary_xaxis('top', functions=(lambda n: n / (fs / 1000.0), lambda ms: ms * (fs / 1000.0)))
+    ax_top.set_xlabel("Time (ms)")
+    
+    # Primary reflection delay mark (e.g., tau = 2.0 ms -> n = 88.2)
+    delay_samples = delay_ms * (fs / 1000.0)
+    ax.axvline(x=delay_samples, color='red', linestyle='--', alpha=0.5, label=f"Delay τ = {delay_ms} ms ({delay_samples:.1f} samples)")
+    ax.legend(loc="upper right")
+
 def main():
     if not os.path.exists(VST_PATH):
         print(f"Error: VST3 binary not found at:\n{VST_PATH}")
@@ -58,12 +74,11 @@ def main():
     p1 = {**base_params, "blend_bl": 1.0, "feedforward_ff": 0.8, "feedback_fb": 0.0, "delay_ms": 2.0}
     out_fir = process_with_warmup(VST_PATH, p1, impulse_400)
 
-    plt.figure(figsize=(10, 3.5))
-    plt.stem(sample_axis[:200], out_fir[:200], basefmt=" ")
-    plt.title("1. FIR Mode Impulse Response (BL=1.0, FF=0.8, FB=0.0)")
-    plt.xlabel("Sample Index (n)")
-    plt.ylabel("Amplitude")
-    plt.grid(True, alpha=0.3)
+    fig, ax = plt.subplots(figsize=(10, 3.8))
+    ax.stem(sample_axis[:200], out_fir[:200], basefmt=" ")
+    ax.set_title("1. FIR Mode Impulse Response (BL=1.0, FF=0.8, FB=0.0, Delay=2.0 ms / 88.2 samples)")
+    ax.set_ylabel("Amplitude")
+    format_time_domain_plot(ax, delay_ms=2.0)
     plt.tight_layout()
     plt.savefig(os.path.join(OUTPUT_DIR, "test1_fir_mode.png"), dpi=300)
     plt.close()
@@ -75,12 +90,11 @@ def main():
     p2 = {**base_params, "blend_bl": 1.0, "feedforward_ff": 0.0, "feedback_fb": -0.7, "delay_ms": 2.0}
     out_iir = process_with_warmup(VST_PATH, p2, impulse_400)
 
-    plt.figure(figsize=(10, 3.5))
-    plt.stem(sample_axis[:350], out_iir[:350], basefmt=" ")
-    plt.title("2. IIR Mode Impulse Response (BL=1.0, FF=0.0, FB=-0.7)")
-    plt.xlabel("Sample Index (n)")
-    plt.ylabel("Amplitude")
-    plt.grid(True, alpha=0.3)
+    fig, ax = plt.subplots(figsize=(10, 3.8))
+    ax.stem(sample_axis[:350], out_iir[:350], basefmt=" ")
+    ax.set_title("2. IIR Mode Impulse Response (BL=1.0, FF=0.0, FB=-0.7, Delay=2.0 ms / 88.2 samples)")
+    ax.set_ylabel("Amplitude")
+    format_time_domain_plot(ax, delay_ms=2.0)
     plt.tight_layout()
     plt.savefig(os.path.join(OUTPUT_DIR, "test2_iir_mode.png"), dpi=300)
     plt.close()
@@ -92,12 +106,11 @@ def main():
     p3 = {**base_params, "blend_bl": 0.7, "feedforward_ff": 1.0, "feedback_fb": -0.7, "delay_ms": 2.0}
     out_allpass = process_with_warmup(VST_PATH, p3, impulse_400)
 
-    plt.figure(figsize=(10, 3.5))
-    plt.stem(sample_axis[:350], out_allpass[:350], basefmt=" ")
-    plt.title("3. Universal / All-Pass Baseline IR (BL=0.7, FF=1.0, FB=-0.7)")
-    plt.xlabel("Sample Index (n)")
-    plt.ylabel("Amplitude")
-    plt.grid(True, alpha=0.3)
+    fig, ax = plt.subplots(figsize=(10, 3.8))
+    ax.stem(sample_axis[:350], out_allpass[:350], basefmt=" ")
+    ax.set_title("3. Universal / All-Pass Baseline IR (BL=0.7, FF=1.0, FB=-0.7, Delay=2.0 ms / 88.2 samples)")
+    ax.set_ylabel("Amplitude")
+    format_time_domain_plot(ax, delay_ms=2.0)
     plt.tight_layout()
     plt.savefig(os.path.join(OUTPUT_DIR, "test3_allpass_mode.png"), dpi=300)
     plt.close()
@@ -112,19 +125,16 @@ def main():
     p4b = {**base_params, "blend_bl": 1.0, "feedforward_ff": 0.0, "feedback_fb": 0.85, "delay_ms": 2.0, "moorer_high_damping": True}
     out_damp_on = process_with_warmup(VST_PATH, p4b, impulse_400)
 
-    plt.figure(figsize=(10, 5))
-    plt.subplot(2, 1, 1)
-    plt.stem(sample_axis[:350], out_damp_off[:350], basefmt=" ")
-    plt.title("4a. Moorer Damping OFF — Sharp High-Frequency Spikes")
-    plt.ylabel("Amplitude")
-    plt.grid(True, alpha=0.3)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 5.5))
+    ax1.stem(sample_axis[:350], out_damp_off[:350], basefmt=" ")
+    ax1.set_title("4a. Moorer Damping OFF — Sharp High-Frequency Spikes (Delay=2.0 ms / 88.2 samples)")
+    ax1.set_ylabel("Amplitude")
+    format_time_domain_plot(ax1, delay_ms=2.0)
 
-    plt.subplot(2, 1, 2)
-    plt.stem(sample_axis[:350], out_damp_on[:350], basefmt=" ")
-    plt.title("4b. Moorer Damping ON — Lowpass Diffusion")
-    plt.xlabel("Sample Index (n)")
-    plt.ylabel("Amplitude")
-    plt.grid(True, alpha=0.3)
+    ax2.stem(sample_axis[:350], out_damp_on[:350], basefmt=" ")
+    ax2.set_title("4b. Moorer Damping ON — Lowpass Diffusion (Delay=2.0 ms / 88.2 samples)")
+    ax2.set_ylabel("Amplitude")
+    format_time_domain_plot(ax2, delay_ms=2.0)
 
     plt.tight_layout()
     plt.savefig(os.path.join(OUTPUT_DIR, "test4_moorer_damping.png"), dpi=300)
@@ -168,14 +178,26 @@ def main():
     df_autogain = pd.DataFrame({"feedback_fb": fb_range, "rms_autogain_off": rms_off, "rms_autogain_on": rms_on})
     df_autogain.to_csv(os.path.join(OUTPUT_DIR, "test5_autogain_sweep.csv"), index=False)
 
-    plt.figure(figsize=(10, 4.5))
+    plt.figure(figsize=(10, 5))
     plt.plot(fb_range, 20 * np.log10(np.array(rms_off) + 1e-12), 'o--', label="Auto-Gain OFF (Unscaled)")
-    plt.plot(fb_range, 20 * np.log10(np.array(rms_on) + 1e-12), 's-', label="Auto-Gain ON (L2 Normalized)")
-    plt.title("5. Auto-Gain Balance (L2 Power Preservation vs Feedback)")
+    plt.plot(fb_range, 20 * np.log10(np.array(rms_on) + 1e-12), 's-', label="Auto-Gain ON (L2 Normalized: g = √(1 - FB²))")
+    plt.axvline(x=0.0, color='gray', linestyle=':', alpha=0.7, label="FB = 0 (Unity Gain g = 1.0)")
+    
+    # Annotate L2 Formula & Unity Gain point
+    plt.annotate(
+        "Unity Gain at FB = 0.0\ng(0) = √(1 - 0²) = 1.0",
+        xy=(0.0, 20 * np.log10(rms_on[len(rms_on)//2] + 1e-12)),
+        xytext=(-0.45, -15),
+        arrowprops=dict(facecolor='black', shrink=0.05, width=1, headwidth=5),
+        fontsize=9,
+        bbox=dict(boxstyle="round,pad=0.3", fc="yellow", alpha=0.4)
+    )
+    
+    plt.title("5. Auto-Gain Balance (L2 Power Preservation vs Feedback)", fontsize=11, fontweight='bold', pad=12)
     plt.xlabel("Feedback Coefficient (FB)")
     plt.ylabel("RMS Output Level (dB)")
     plt.grid(True, alpha=0.3)
-    plt.legend()
+    plt.legend(loc="upper right", frameon=True, facecolor='white', framealpha=0.9)
     plt.tight_layout()
     plt.savefig(os.path.join(OUTPUT_DIR, "test5_autogain_curve.png"), dpi=300)
     plt.close()
@@ -248,9 +270,9 @@ def main():
             "blend_bl": 0.0,
             "feedforward_ff": 1.0,
             "feedback_fb": 0.0,
-            "delay_ms": 2.5,
-            "mod_depth_ms": 2.0,
-            "mod_rate_hz": 2.0
+            "delay_ms": 0.1,
+            "mod_depth_ms": 3.0,
+            "mod_rate_hz": 5.0
         },
         "Chorus": {
             "preset": "Chorus",
@@ -259,7 +281,7 @@ def main():
             "feedforward_ff": 1.0,
             "feedback_fb": 0.0,
             "delay_ms": 20.0,
-            "mod_depth_ms": 15.0,
+            "mod_depth_ms": 30.0,
             "mod_rate_hz": 1.2
         }
     }
@@ -314,19 +336,6 @@ def main():
 
     print("\nAll 7 Verification Tests Completed Successfully!")
     print(f"Generated artifacts in: {OUTPUT_DIR}/")
-    print(" Plots:")
-    print("  - test1_fir_mode.png")
-    print("  - test2_iir_mode.png")
-    print("  - test3_allpass_mode.png")
-    print("  - test4_moorer_damping.png")
-    print("  - test5_autogain_curve.png")
-    print("  - test6_flanger_spectrogram.png")
-    print("  - test7_vibrato_chorus_zoomed_spectrograms.png")
-    print(" CSV Datasets:")
-    print("  - all_tests_impulse_responses.csv")
-    print("  - test5_autogain_sweep.csv")
-    print("  - test6_flanger_spectrogram_matrix.csv")
-    print("  - test7_phase_analysis_matrix.csv")
 
 if __name__ == "__main__":
     main()
