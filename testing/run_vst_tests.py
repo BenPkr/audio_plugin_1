@@ -181,9 +181,9 @@ def main():
     plt.close()
 
     # =========================================================================
-    # TEST 6: Flanger Mode (White Noise Spectrogram)
+    # TEST 6: Flanger Mode (Input White Noise vs. Output Spectrogram)
     # =========================================================================
-    print("Running Test 6: Flanger Mode (White Noise Spectrogram)...")
+    print("Running Test 6: Flanger Mode (Input Noise vs Output Spectrogram)...")
     np.random.seed(42)
     noise_3s = np.random.normal(0, 0.2, int(SAMPLE_RATE * 3.0)).astype(np.float32)
 
@@ -200,36 +200,44 @@ def main():
     valid_flanger = {k: v for k, v in flanger_params.items() if hasattr(load_plugin(VST_PATH), k)}
     out_flanger = process_with_warmup(VST_PATH, valid_flanger, noise_3s)
 
-    frequencies, times, Sxx = signal.spectrogram(
-        out_flanger, fs=SAMPLE_RATE, nperseg=1024, noverlap=512
-    )
-    power_db = 10 * np.log10(Sxx + 1e-12)
+    f_in, t_in, S_in = signal.spectrogram(noise_3s, fs=SAMPLE_RATE, nperseg=1024, noverlap=512)
+    f_out, t_out, S_out = signal.spectrogram(out_flanger, fs=SAMPLE_RATE, nperseg=1024, noverlap=512)
 
-    plt.figure(figsize=(10, 4))
-    plt.pcolormesh(times, frequencies, power_db, shading='gouraud', cmap='magma')
-    plt.title("6. Flanger Mode: Sweeping Resonant Comb Notches (White Noise Input)")
+    plt.figure(figsize=(12, 7))
+
+    plt.subplot(2, 1, 1)
+    plt.pcolormesh(t_in, f_in, 10 * np.log10(S_in + 1e-12), shading='gouraud', cmap='magma')
+    plt.title("6a. Input Signal: Flat Gaussian White Noise Floor")
+    plt.ylabel("Frequency (Hz)")
+    plt.colorbar(label="Power (dB)")
+
+    plt.subplot(2, 1, 2)
+    plt.pcolormesh(t_out, f_out, 10 * np.log10(S_out + 1e-12), shading='gouraud', cmap='magma')
+    plt.title("6b. Flanger Output: Sweeping Resonant Comb Notches")
     plt.ylabel("Frequency (Hz)")
     plt.xlabel("Time (s)")
     plt.colorbar(label="Power (dB)")
+
     plt.tight_layout()
     plt.savefig(os.path.join(OUTPUT_DIR, "test6_flanger_spectrogram.png"), dpi=300)
     plt.close()
 
-    # Export Flanger Spectrogram Dataset
+    # Export Dataset
     spectrogram_records = []
-    for t_idx, t_val in enumerate(times):
-        for f_idx, f_val in enumerate(frequencies):
+    for t_idx, t_val in enumerate(t_out):
+        for f_idx, f_val in enumerate(f_out):
             spectrogram_records.append({
                 "time_sec": t_val,
                 "frequency_hz": f_val,
-                "power_db": power_db[f_idx, t_idx]
+                "input_power_db": 10 * np.log10(S_in[f_idx, t_idx] + 1e-12),
+                "flanger_power_db": 10 * np.log10(S_out[f_idx, t_idx] + 1e-12)
             })
     pd.DataFrame(spectrogram_records).to_csv(os.path.join(OUTPUT_DIR, "test6_flanger_spectrogram_matrix.csv"), index=False)
 
     # =========================================================================
-    # TEST 7: Vibrato & Chorus (Zoomed Magnitude Spectrograms)
+    # TEST 7: Vibrato & Chorus (Input Harmonic vs. Output Spectrograms)
     # =========================================================================
-    print("Running Test 7: Vibrato & Chorus (Zoomed Spectrograms 0–2kHz)...")
+    print("Running Test 7: Vibrato & Chorus (Input vs Output Spectrograms 0–2kHz)...")
     t_3s = np.linspace(0, 3.0, int(SAMPLE_RATE * 3.0), endpoint=False)
     harmonic_signal = (0.2 * np.sin(2 * np.pi * 440.0 * t_3s) + 0.1 * np.sin(2 * np.pi * 880.0 * t_3s)).astype(np.float32)
 
@@ -256,26 +264,53 @@ def main():
         }
     }
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 4.5))
+    # Compute Input Signal STFT
+    f_harm, t_harm, Z_in = signal.stft(harmonic_signal, fs=SAMPLE_RATE, nperseg=2048, noverlap=1024)
+    power_in_db = 10 * np.log10(np.abs(Z_in)**2 + 1e-12)
 
-    for idx, (profile_name, params) in enumerate(target_profiles.items()):
+    plt.figure(figsize=(12, 10))
+
+    # Row 1: Input Reference Signal
+    plt.subplot(3, 1, 1)
+    plt.pcolormesh(t_harm, f_harm, power_in_db, shading='gouraud', cmap='magma')
+    plt.ylim([0, 2000])
+    plt.title("7a. Input Reference Signal: Stationary Harmonics (440 Hz & 880 Hz)")
+    plt.ylabel("Frequency (Hz)")
+    plt.colorbar(label="Power (dB)")
+
+    phase_records = []
+
+    for idx, (profile_name, params) in enumerate(target_profiles.items(), 2):
         valid_params = {k: v for k, v in params.items() if hasattr(load_plugin(VST_PATH), k)}
         out_target = process_with_warmup(VST_PATH, valid_params, harmonic_signal)
 
-        f, t_stft, Zxx = signal.stft(out_target, fs=SAMPLE_RATE, nperseg=2048, noverlap=1024)
-        power_db = 10 * np.log10(np.abs(Zxx)**2 + 1e-12)
+        f_out, t_out, Z_out = signal.stft(out_target, fs=SAMPLE_RATE, nperseg=2048, noverlap=1024)
+        power_out_db = 10 * np.log10(np.abs(Z_out)**2 + 1e-12)
 
-        ax = axes[idx]
-        mesh = ax.pcolormesh(t_stft, f, power_db, shading='gouraud', cmap='magma')
-        ax.set_ylim([0, 2000]) # Zoomed Y-Axis focused on fundamental pitch motion
-        ax.set_title(f"7{chr(97 + idx)}. {profile_name} — Fundamental Pitch Modulation (0–2 kHz)")
-        ax.set_ylabel("Frequency (Hz)")
-        ax.set_xlabel("Time (s)")
-        fig.colorbar(mesh, ax=ax, label="Power (dB)")
+        plt.subplot(3, 1, idx)
+        plt.pcolormesh(t_out, f_out, power_out_db, shading='gouraud', cmap='magma')
+        plt.ylim([0, 2000])
+        plt.title(f"7{chr(96 + idx)}. {profile_name} Output: Pitch Motion Analysis (0–2 kHz)")
+        plt.ylabel("Frequency (Hz)")
+        if idx == 3:
+            plt.xlabel("Time (s)")
+        plt.colorbar(label="Power (dB)")
+
+        for t_i, t_v in enumerate(t_out):
+            for f_i, f_v in enumerate(f_out):
+                if f_v <= 2000:
+                    phase_records.append({
+                        "preset_mode": profile_name,
+                        "time_sec": t_v,
+                        "frequency_hz": f_v,
+                        "power_db": power_out_db[f_i, t_i]
+                    })
 
     plt.tight_layout()
     plt.savefig(os.path.join(OUTPUT_DIR, "test7_vibrato_chorus_zoomed_spectrograms.png"), dpi=300)
     plt.close()
+
+    pd.DataFrame(phase_records).to_csv(os.path.join(OUTPUT_DIR, "test7_phase_analysis_matrix.csv"), index=False)
 
     print("\nAll 7 Verification Tests Completed Successfully!")
     print(f"Generated artifacts in: {OUTPUT_DIR}/")
@@ -286,7 +321,7 @@ def main():
     print("  - test4_moorer_damping.png")
     print("  - test5_autogain_curve.png")
     print("  - test6_flanger_spectrogram.png")
-    print("  - test7_vibrato_chorus_spectrogram_phasogram.png")
+    print("  - test7_vibrato_chorus_zoomed_spectrograms.png")
     print(" CSV Datasets:")
     print("  - all_tests_impulse_responses.csv")
     print("  - test5_autogain_sweep.csv")
