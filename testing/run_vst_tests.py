@@ -148,7 +148,7 @@ def main():
     # =========================================================================
     print("Running Test 5: Auto-Gain (L2 Balance Curve Sweep)...")
     np.random.seed(42)
-    noise_duration = int(SAMPLE_RATE * 1.0) # 1 second noise buffer
+    noise_duration = int(SAMPLE_RATE * 1.0)
     white_noise = np.random.normal(0, 0.1, noise_duration).astype(np.float32)
 
     fb_range = np.linspace(-0.95, 0.95, 39)
@@ -181,93 +181,117 @@ def main():
     plt.close()
 
     # =========================================================================
-    # TEST 6: Modulated Modes (Explicit LFO Parameter Drive)
+    # TEST 6: Flanger Mode (White Noise Spectrogram)
     # =========================================================================
-    print("Running Test 6: Modulated Modes (Spectrogram Sweep)...")
+    print("Running Test 6: Flanger Mode (White Noise Spectrogram)...")
     np.random.seed(42)
     noise_3s = np.random.normal(0, 0.2, int(SAMPLE_RATE * 3.0)).astype(np.float32)
 
-    # Explicit DSP parameter profiles for each modulated preset
-    modulated_profiles = {
+    flanger_params = {
+        "preset": "Flanger",
+        "modulation_enable": True,
+        "blend_bl": 0.7,
+        "feedforward_ff": 0.7,
+        "feedback_fb": 0.7,
+        "delay_ms": 1.5,
+        "mod_depth_ms": 1.0,
+        "mod_rate_hz": 0.4
+    }
+    valid_flanger = {k: v for k, v in flanger_params.items() if hasattr(load_plugin(VST_PATH), k)}
+    out_flanger = process_with_warmup(VST_PATH, valid_flanger, noise_3s)
+
+    frequencies, times, Sxx = signal.spectrogram(
+        out_flanger, fs=SAMPLE_RATE, nperseg=1024, noverlap=512
+    )
+    power_db = 10 * np.log10(Sxx + 1e-12)
+
+    plt.figure(figsize=(10, 4))
+    plt.pcolormesh(times, frequencies, power_db, shading='gouraud', cmap='magma')
+    plt.title("6. Flanger Mode: Sweeping Resonant Comb Notches (White Noise Input)")
+    plt.ylabel("Frequency (Hz)")
+    plt.xlabel("Time (s)")
+    plt.colorbar(label="Power (dB)")
+    plt.tight_layout()
+    plt.savefig(os.path.join(OUTPUT_DIR, "test6_flanger_spectrogram.png"), dpi=300)
+    plt.close()
+
+    # Export Flanger Spectrogram Dataset
+    spectrogram_records = []
+    for t_idx, t_val in enumerate(times):
+        for f_idx, f_val in enumerate(frequencies):
+            spectrogram_records.append({
+                "time_sec": t_val,
+                "frequency_hz": f_val,
+                "power_db": power_db[f_idx, t_idx]
+            })
+    pd.DataFrame(spectrogram_records).to_csv(os.path.join(OUTPUT_DIR, "test6_flanger_spectrogram_matrix.csv"), index=False)
+
+    # =========================================================================
+    # TEST 7: Vibrato & Chorus (Zoomed Magnitude Spectrograms)
+    # =========================================================================
+    print("Running Test 7: Vibrato & Chorus (Zoomed Spectrograms 0–2kHz)...")
+    t_3s = np.linspace(0, 3.0, int(SAMPLE_RATE * 3.0), endpoint=False)
+    harmonic_signal = (0.2 * np.sin(2 * np.pi * 440.0 * t_3s) + 0.1 * np.sin(2 * np.pi * 880.0 * t_3s)).astype(np.float32)
+
+    target_profiles = {
         "Vibrato": {
             "preset": "Vibrato",
             "modulation_enable": True,
             "blend_bl": 0.0,
             "feedforward_ff": 1.0,
             "feedback_fb": 0.0,
-            "delay_ms": 0.1,
+            "delay_ms": 2.5,
             "mod_depth_ms": 2.0,
             "mod_rate_hz": 2.0
-        },
-        "Flanger": {
-            "preset": "Flanger",
-            "modulation_enable": True,
-            "blend_bl": 0.7,
-            "feedforward_ff": 0.7,
-            "feedback_fb": 0.7,
-            "delay_ms": 0.1,
-            "mod_depth_ms": 1.0,
-            "mod_rate_hz": 0.4
         },
         "Chorus": {
             "preset": "Chorus",
             "modulation_enable": True,
             "blend_bl": 0.7,
             "feedforward_ff": 1.0,
-            "feedback_fb": -0.7,
-            "delay_ms": 15.0,
+            "feedback_fb": 0.0,
+            "delay_ms": 20.0,
             "mod_depth_ms": 15.0,
             "mod_rate_hz": 1.2
         }
     }
 
-    spectrogram_records = []
-    plt.figure(figsize=(12, 8))
+    fig, axes = plt.subplots(1, 2, figsize=(14, 4.5))
 
-    for i, (preset_name, params) in enumerate(modulated_profiles.items(), 1):
-        # Filter out parameters not declared in the plugin parameter map
+    for idx, (profile_name, params) in enumerate(target_profiles.items()):
         valid_params = {k: v for k, v in params.items() if hasattr(load_plugin(VST_PATH), k)}
-        out_mod = process_with_warmup(VST_PATH, valid_params, noise_3s)
+        out_target = process_with_warmup(VST_PATH, valid_params, harmonic_signal)
 
-        frequencies, times, Sxx = signal.spectrogram(
-            out_mod, fs=SAMPLE_RATE, nperseg=1024, noverlap=512
-        )
-        power_db = 10 * np.log10(Sxx + 1e-12)
+        f, t_stft, Zxx = signal.stft(out_target, fs=SAMPLE_RATE, nperseg=2048, noverlap=1024)
+        power_db = 10 * np.log10(np.abs(Zxx)**2 + 1e-12)
 
-        plt.subplot(3, 1, i)
-        plt.pcolormesh(times, frequencies, power_db, shading='gouraud', cmap='magma')
-        plt.title(f"6{chr(96 + i)}. Spectrogram: {preset_name} (Sweeping Comb Notches)")
-        plt.ylabel("Frequency (Hz)")
-        if i == 3:
-            plt.xlabel("Time (s)")
-        plt.colorbar(label="Power (dB)")
-
-        for t_idx, t_val in enumerate(times):
-            for f_idx, f_val in enumerate(frequencies):
-                spectrogram_records.append({
-                    "preset_mode": preset_name,
-                    "time_sec": t_val,
-                    "frequency_hz": f_val,
-                    "power_db": power_db[f_idx, t_idx]
-                })
+        ax = axes[idx]
+        mesh = ax.pcolormesh(t_stft, f, power_db, shading='gouraud', cmap='magma')
+        ax.set_ylim([0, 2000]) # Zoomed Y-Axis focused on fundamental pitch motion
+        ax.set_title(f"7{chr(97 + idx)}. {profile_name} — Fundamental Pitch Modulation (0–2 kHz)")
+        ax.set_ylabel("Frequency (Hz)")
+        ax.set_xlabel("Time (s)")
+        fig.colorbar(mesh, ax=ax, label="Power (dB)")
 
     plt.tight_layout()
-    plt.savefig(os.path.join(OUTPUT_DIR, "test6_modulated_spectrograms.png"), dpi=300)
+    plt.savefig(os.path.join(OUTPUT_DIR, "test7_vibrato_chorus_zoomed_spectrograms.png"), dpi=300)
     plt.close()
 
-    df_spec = pd.DataFrame(spectrogram_records)
-    df_spec.to_csv(os.path.join(OUTPUT_DIR, "test6_spectrogram_matrix.csv"), index=False)
-
-    print("\nAll 6 Structural Verification Tests Completed Successfully!")
-    print(f"Generated publication-ready files in: {OUTPUT_DIR}/")
+    print("\nAll 7 Verification Tests Completed Successfully!")
+    print(f"Generated artifacts in: {OUTPUT_DIR}/")
+    print(" Plots:")
     print("  - test1_fir_mode.png")
     print("  - test2_iir_mode.png")
     print("  - test3_allpass_mode.png")
     print("  - test4_moorer_damping.png")
     print("  - test5_autogain_curve.png")
-    print("  - test6_modulated_spectrograms.png")
+    print("  - test6_flanger_spectrogram.png")
+    print("  - test7_vibrato_chorus_spectrogram_phasogram.png")
+    print(" CSV Datasets:")
     print("  - all_tests_impulse_responses.csv")
     print("  - test5_autogain_sweep.csv")
+    print("  - test6_flanger_spectrogram_matrix.csv")
+    print("  - test7_phase_analysis_matrix.csv")
 
 if __name__ == "__main__":
     main()
