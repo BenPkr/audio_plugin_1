@@ -47,7 +47,7 @@ void CombFilter::reset()
         delayLine.reset();
 }
 
-void CombFilter::setDelayMs(float newDelayMs)           { smoothedDelayMs.setTargetValue(juce::jlimit(0.1f, maxDelayMs, newDelayMs)); }
+void CombFilter::setDelayMs(float newDelayMs)           { smoothedDelayMs.setTargetValue(juce::jlimit(0.0f, maxDelayMs, newDelayMs)); }
 void CombFilter::setBlend(float newBlend)               { smoothedBlend.setTargetValue(juce::jlimit(-1.0f, 1.0f, newBlend)); }
 void CombFilter::setFeedforward(float newFeedforward)   { smoothedFeedforward.setTargetValue(juce::jlimit(-1.0f, 1.0f, newFeedforward)); }
 void CombFilter::setFeedback(float newFeedback)         { smoothedFeedback.setTargetValue(juce::jlimit(-0.99f, 0.99f, newFeedback)); }
@@ -80,7 +80,9 @@ void CombFilter::processBlock(juce::AudioBuffer<float>& buffer)
         const float normScale = autoGainEnabled ? std::sqrt(1.0f - (absFb * absFb)) : 1.0f;
 
         const float modOffsetMs = modEnabled ? modulator.processSample() : 0.0f;
-        const float totalDelayMs = juce::jlimit(0.1f, maxDelayMs, curDelayMs + modOffsetMs);
+
+        // Clamp total delay time to guaranteed non-negative bounds [0.0 ms, maxDelayMs]
+        const float totalDelayMs = juce::jlimit(0.0f, maxDelayMs, curDelayMs + modOffsetMs);
         const float curDelaySamples = (totalDelayMs / 1000.0f) * static_cast<float>(currentSampleRate);
 
         for (int channel = 0; channel < numChannels; ++channel)

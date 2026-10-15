@@ -80,9 +80,9 @@ void FrequencyResponsePlot::paint (juce::Graphics& g)
     if (modOn)
     {
         if (modType < 0.5f)
-            modOffsetMs = std::sin (guiPhase) * modDepth;
+            modOffsetMs = 0.5f * (std::sin (guiPhase) + 1.0f) * modDepth;
         else
-            modOffsetMs = guiNoiseState * modDepth;
+            modOffsetMs = 0.5f * (juce::jlimit (-1.0f, 1.0f, guiNoiseState) + 1.0f) * modDepth;
     }
 
     const float totalDelayMs = juce::jlimit (0.1f, 100.0f, delayMs + modOffsetMs);
