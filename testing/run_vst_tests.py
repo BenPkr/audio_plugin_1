@@ -12,27 +12,24 @@ VST_PATH = os.path.join(
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output")
 SAMPLE_RATE = 44100.0
 
-def process_with_warmup(plugin, params, num_samples=500):
+def process_with_warmup(plugin_path, params, num_samples=500):
     """
-    Applies parameters, processes a warm-up buffer to flush parameter 
-    smoothing / latency, then feeds a unit impulse.
+    Applies parameters, warms up the plugin, then feeds a unit impulse in the
+    same host call so parameter smoothing can settle before the impulse.
     """
-    # 1. Apply parameters
+    plugin = load_plugin(plugin_path)
+
     for param_name, val in params.items():
-        if hasattr(plugin, param_name):
-            setattr(plugin, param_name, val)
+        if param_name not in plugin.parameters:
+            raise ValueError(f"Plugin parameter not found: {param_name}")
+        setattr(plugin, param_name, val)
 
-    # 2. Process warm-up silence to settle parameter smoothing (1024 samples)
-    warmup_buffer = np.zeros((1, 1024), dtype=np.float32)
-    plugin(warmup_buffer, sample_rate=SAMPLE_RATE)
+    warmup_samples = 1024
+    input_buffer = np.zeros((1, warmup_samples + num_samples), dtype=np.float32)
+    input_buffer[0, warmup_samples] = 1.0
 
-    # 3. Create unit impulse
-    impulse_input = np.zeros((1, num_samples), dtype=np.float32)
-    impulse_input[0, 0] = 1.0
-
-    # 4. Capture actual impulse response
-    output = plugin(impulse_input, sample_rate=SAMPLE_RATE)[0]
-    return output
+    output = plugin(input_buffer, sample_rate=SAMPLE_RATE)[0]
+    return output[warmup_samples:]
 
 def main():
     if not os.path.exists(VST_PATH):
@@ -40,8 +37,6 @@ def main():
         return
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    plugin = load_plugin(VST_PATH)
-
     # Base dictionary for Custom (Free) mode
     base_params = {
         "preset": "Custom (Free)",
@@ -55,23 +50,23 @@ def main():
 
     # TEST 1: FIR Mode
     p1 = {**base_params, "blend_bl": 1.0, "feedforward_ff": 0.8, "feedback_fb": 0.0, "delay_ms": 2.0}
-    out_fir = process_with_warmup(plugin, p1, num_samples)
+    out_fir = process_with_warmup(VST_PATH, p1, num_samples)
 
     # TEST 2: IIR Mode
     p2 = {**base_params, "blend_bl": 1.0, "feedforward_ff": 0.0, "feedback_fb": -0.7, "delay_ms": 2.0}
-    out_iir = process_with_warmup(plugin, p2, num_samples)
+    out_iir = process_with_warmup(VST_PATH, p2, num_samples)
 
     # TEST 3: All-Pass Mode
     p3 = {**base_params, "blend_bl": 0.7, "feedforward_ff": 1.0, "feedback_fb": -0.7, "delay_ms": 2.0}
-    out_allpass = process_with_warmup(plugin, p3, num_samples)
+    out_allpass = process_with_warmup(VST_PATH, p3, num_samples)
 
     # TEST 4a: Moorer Damping OFF
     p4a = {**base_params, "blend_bl": 1.0, "feedforward_ff": 0.0, "feedback_fb": 0.85, "delay_ms": 2.0, "moorer_high_damping": False}
-    out_damp_off = process_with_warmup(plugin, p4a, num_samples)
+    out_damp_off = process_with_warmup(VST_PATH, p4a, num_samples)
 
     # TEST 4b: Moorer Damping ON
     p4b = {**base_params, "blend_bl": 1.0, "feedforward_ff": 0.0, "feedback_fb": 0.85, "delay_ms": 2.0, "moorer_high_damping": True}
-    out_damp_on = process_with_warmup(plugin, p4b, num_samples)
+    out_damp_on = process_with_warmup(VST_PATH, p4b, num_samples)
 
     # Export CSV
     df_results = pd.DataFrame({
