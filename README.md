@@ -43,8 +43,9 @@ response and the range traversed by the notches.
 
 ### Visual analysis
 
-- The audio scope displays captured input and output waveforms. In Tremolo mode,
-  it also displays the gain envelope.
+- The audio scope aligns input and output waveforms to the nearest rising input
+  threshold crossing, with a free-running fallback when no crossing is found.
+  In Tremolo mode, it also displays the correspondingly aligned gain envelope.
 - The frequency panel shows the comb response in Comb Filter mode and live
   input/output spectra in Ring Mod and Tremolo modes. Phaser mode shows its
   current response and the response envelope over the LFO sweep.

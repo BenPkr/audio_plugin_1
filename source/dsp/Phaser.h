@@ -18,10 +18,8 @@ public:
 private:
     struct AllPassState
     {
-        float x1 { 0.0f };
-        float x2 { 0.0f };
-        float y1 { 0.0f };
-        float y2 { 0.0f };
+        float xh1 { 0.0f };
+        float xh2 { 0.0f };
     };
 
     static constexpr int maximumStages = 8;

@@ -93,6 +93,7 @@ target_sources(UniversalCombFilter
         source/dsp/Tremolo.cpp
         source/dsp/Phaser.h
         source/dsp/Phaser.cpp
+        source/dsp/PhaserMath.h
         source/gui/AudioScopePlot.h
         source/gui/AudioScopePlot.cpp
         source/gui/FrequencyResponsePlot.h

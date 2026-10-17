@@ -1,6 +1,7 @@
 #include "FrequencyResponsePlot.h"
 #include "../Parameters.h"
 #include "../PluginProcessor.h"
+#include "../dsp/PhaserMath.h"
 #include <algorithm>
 #include <cmath>
 #include <complex>
@@ -192,12 +193,11 @@ void FrequencyResponsePlot::paint (juce::Graphics& g)
                         minimumFrequency * std::exp (stagePosition * stageLogRange)
                             * frequencyScale,
                         sampleRate * 0.45);
-                    const double centerOmega = 2.0 * juce::MathConstants<double>::pi
-                                             * centerFrequency / sampleRate;
-                    const double alpha = std::sin (centerOmega) / (2.0 * 0.7071067811865476);
-                    const double a1 = -2.0 * std::cos (centerOmega) / (1.0 + alpha);
-                    const double a2 = (1.0 - alpha) / (1.0 + alpha);
-                    allPassResponse *= (a2 + a1 * z1 + z2) / (1.0 + a1 * z1 + a2 * z2);
+                    const auto coefficients = PhaserMath::getAllPassCoefficients(
+                        centerFrequency, sampleRate);
+                    const double a1 = coefficients.d * (1.0 - coefficients.c);
+                    allPassResponse *= (-coefficients.c + a1 * z1 + z2)
+                                     / (1.0 + a1 * z1 - coefficients.c * z2);
                 }
 
                 return std::abs ((1.0 - static_cast<double> (wetMix))

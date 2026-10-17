@@ -1,4 +1,5 @@
 #include "Phaser.h"
+#include "PhaserMath.h"
 
 #include <algorithm>
 #include <cmath>
@@ -84,19 +85,16 @@ void Phaser::processBlock(juce::AudioBuffer<float>& buffer)
                     * std::exp(stagePosition * logFrequencyRange);
                 const double frequency = std::min(
                     baseFrequency * frequencyScale, sampleRate * 0.45);
-                const double omega = 2.0 * juce::MathConstants<double>::pi
-                                   * frequency * phaseIncrementScale;
-                const double alpha = std::sin(omega) / (2.0 * 0.7071067811865476);
-                const float a1 = static_cast<float>(-2.0 * std::cos(omega) / (1.0 + alpha));
-                const float a2 = static_cast<float>((1.0 - alpha) / (1.0 + alpha));
+                const auto coefficients = PhaserMath::getAllPassCoefficients(frequency, sampleRate);
+                const double a1 = coefficients.d * (1.0 - coefficients.c);
                 auto& state = states[static_cast<size_t>(stage)];
-                const float output = a2 * wet + a1 * state.x1 + state.x2
-                                   - a1 * state.y1 - a2 * state.y2;
+                const float xhNew = static_cast<float>(
+                    static_cast<double>(wet) - a1 * state.xh1 + coefficients.c * state.xh2);
+                const float output = static_cast<float>(
+                    -coefficients.c * xhNew + a1 * state.xh1 + state.xh2);
 
-                state.x2 = state.x1;
-                state.x1 = wet;
-                state.y2 = state.y1;
-                state.y1 = output;
+                state.xh2 = state.xh1;
+                state.xh1 = xhNew;
                 wet = output;
             }
 
