@@ -49,9 +49,14 @@ private:
     std::atomic<float>* modTypeParam      { nullptr };
     std::atomic<float>* modDepthParam     { nullptr };
     std::atomic<float>* modFrequencyParam { nullptr };
+    std::atomic<float>* phaserStagesParam { nullptr };
+    std::atomic<float>* phaserRateParam { nullptr };
+    std::atomic<float>* phaserDepthParam { nullptr };
+    std::atomic<float>* phaserMixParam { nullptr };
 
     // GUI LFO State Tracking
     float guiPhase { 0.0f };
+    float phaserPhase { 0.0f };
     float guiNoiseState { 0.0f };
     int processingMode { 0 };
     juce::Random random;

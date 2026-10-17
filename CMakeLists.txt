@@ -91,6 +91,8 @@ target_sources(UniversalCombFilter
         source/dsp/RingModulator.cpp
         source/dsp/Tremolo.h
         source/dsp/Tremolo.cpp
+        source/dsp/Phaser.h
+        source/dsp/Phaser.cpp
         source/gui/AudioScopePlot.h
         source/gui/AudioScopePlot.cpp
         source/gui/FrequencyResponsePlot.h

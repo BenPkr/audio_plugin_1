@@ -9,6 +9,7 @@ ModulationSignalPlot::ModulationSignalPlot(juce::AudioProcessorValueTreeState& a
     modTypeParam      = valueTreeState.getRawParameterValue(ParameterIDs::modType);
     modDepthParam     = valueTreeState.getRawParameterValue(ParameterIDs::modDepth);
     modFrequencyParam = valueTreeState.getRawParameterValue(ParameterIDs::modFrequency);
+    phaserRateParam = valueTreeState.getRawParameterValue(ParameterIDs::phaserRate);
 
     signalHistory.resize(static_cast<size_t>(numHistoryPoints), 0.0f);
 
@@ -22,6 +23,19 @@ ModulationSignalPlot::~ModulationSignalPlot()
 
 void ModulationSignalPlot::timerCallback()
 {
+    if (processingMode == 3)
+    {
+        constexpr float dt = 0.033f;
+        const float rate = phaserRateParam ? juce::jlimit(0.05f, 8.0f, phaserRateParam->load()) : 0.5f;
+        phaserPhase += 2.0f * juce::MathConstants<float>::pi * rate * dt;
+        if (phaserPhase >= 2.0f * juce::MathConstants<float>::pi)
+            phaserPhase = std::fmod(phaserPhase, 2.0f * juce::MathConstants<float>::pi);
+        std::rotate(signalHistory.begin(), signalHistory.begin() + 1, signalHistory.end());
+        signalHistory.back() = 0.5f * (std::sin(phaserPhase) + 1.0f);
+        repaint();
+        return;
+    }
+
     const bool  enabled = modEnableParam    ? (modEnableParam->load() > 0.5f) : false;
     const float typeVal = modTypeParam      ? modTypeParam->load() : 0.0f;
     const float depth   = modDepthParam     ? modDepthParam->load()     : 0.0f;
@@ -74,14 +88,17 @@ void ModulationSignalPlot::paint(juce::Graphics& g)
     // Title Overlay
     g.setColour(juce::Colours::lightgrey);
     g.setFont(juce::FontOptions(11.0f));
-    g.drawText("Delay Modulation (0 to Depth)", bounds.removeFromTop(16.0f), juce::Justification::left, false);
+    g.drawText(processingMode == 3 ? "Phaser LFO (Sweep Position)"
+                                   : "Delay Modulation (0 to Depth)",
+               bounds.removeFromTop(16.0f), juce::Justification::left, false);
 
     const float bottomY = bounds.getBottom();
     g.setColour(juce::Colours::grey.withAlpha(0.3f));
     g.drawHorizontalLine(static_cast<int>(bottomY), bounds.getX(), bounds.getRight());
 
-    const bool enabled = modEnableParam ? (modEnableParam->load() > 0.5f) : false;
-    const float depth = modDepthParam ? modDepthParam->load() : 0.0f;
+    const bool enabled = processingMode == 3
+                       || (modEnableParam ? (modEnableParam->load() > 0.5f) : false);
+    const float depth = processingMode == 3 ? 1.0f : (modDepthParam ? modDepthParam->load() : 0.0f);
 
     // Draw Waveform Path
     juce::Path wavePath;

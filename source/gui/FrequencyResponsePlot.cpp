@@ -21,6 +21,10 @@ FrequencyResponsePlot::FrequencyResponsePlot (AudioPluginAudioProcessor& process
     modTypeParam      = valueTreeState.getRawParameterValue (ParameterIDs::modType);
     modDepthParam     = valueTreeState.getRawParameterValue (ParameterIDs::modDepth);
     modFrequencyParam = valueTreeState.getRawParameterValue (ParameterIDs::modFrequency);
+    phaserStagesParam = valueTreeState.getRawParameterValue (ParameterIDs::phaserStages);
+    phaserRateParam   = valueTreeState.getRawParameterValue (ParameterIDs::phaserRate);
+    phaserDepthParam  = valueTreeState.getRawParameterValue (ParameterIDs::phaserDepth);
+    phaserMixParam    = valueTreeState.getRawParameterValue (ParameterIDs::phaserMix);
 
     startTimer (33); // ~30 FPS refresh rate
 }
@@ -34,6 +38,14 @@ void FrequencyResponsePlot::timerCallback()
 {
     // Advance LFO state for GUI visualization frame (~33ms steps)
     constexpr float dt = 0.033f;
+    if (processingMode == 3)
+    {
+        const float rate = phaserRateParam ? juce::jlimit (0.05f, 8.0f, phaserRateParam->load()) : 0.5f;
+        phaserPhase += 2.0f * juce::MathConstants<float>::pi * rate * dt;
+        if (phaserPhase >= 2.0f * juce::MathConstants<float>::pi)
+            phaserPhase = std::fmod (phaserPhase, 2.0f * juce::MathConstants<float>::pi);
+    }
+
     const float modFreq  = modFrequencyParam ? juce::jlimit (0.05f, 20.0f, modFrequencyParam->load()) : 1.0f;
     const float modType  = modTypeParam      ? modTypeParam->load()      : 0.0f;
 
@@ -50,7 +62,7 @@ void FrequencyResponsePlot::timerCallback()
         guiNoiseState += alpha * (white - guiNoiseState);
     }
 
-    if (processingMode != 0)
+    if (processingMode == 1 || processingMode == 2)
     {
         const int sampleCount = audioProcessor.copyAnalysisSamples (
             analysisInput.data(), analysisOutput.data(), nullptr, fftSize);
@@ -124,14 +136,169 @@ void FrequencyResponsePlot::paint (juce::Graphics& g)
     // Header Title
     g.setColour (juce::Colours::lightgrey);
     g.setFont (juce::FontOptions (11.0f));
-    g.drawText (processingMode == 0 ? "Frequency Response (Magnitude)" : "Live Input / Output Spectrum",
+    g.drawText (processingMode == 0 ? "Frequency Response (Magnitude)"
+                 : processingMode == 3 ? "Phaser Response + Sweep Range"
+                 : "Live Input / Output Spectrum",
                 bounds.removeFromTop (16.0f), juce::Justification::left, false);
 
     if (processingMode != 0)
     {
         g.setColour (juce::Colours::lightgrey);
-        g.drawText (processingMode == 1 ? "Live Spectrum - Ring Modulator" : "Live Spectrum - Tremolo",
+        g.drawText (processingMode == 1 ? "Live Spectrum - Ring Modulator"
+                     : processingMode == 2 ? "Live Spectrum - Tremolo"
+                     : "Moving all-pass notches",
                     bounds.removeFromTop (14.0f), juce::Justification::left, false);
+
+        if (processingMode == 3)
+        {
+            const int stageCount = juce::jlimit (
+                2, 8, phaserStagesParam ? static_cast<int> (phaserStagesParam->load()) : 4);
+            const float sweepDepth = phaserDepthParam
+                                   ? juce::jlimit (0.0f, 1.0f, phaserDepthParam->load() * 0.01f)
+                                   : 0.75f;
+            const float wetMix = phaserMixParam
+                               ? juce::jlimit (0.0f, 1.0f, phaserMixParam->load() * 0.01f)
+                               : 0.5f;
+            const double sampleRate = audioProcessor.getSampleRate() > 0.0
+                                    ? audioProcessor.getSampleRate() : 44100.0;
+            const double maximumFrequency = std::min (6000.0, sampleRate * 0.4);
+            const double minimumFrequency = std::min (150.0, maximumFrequency * 0.25);
+            const double stageLogRange = std::log (maximumFrequency / minimumFrequency);
+            const float currentLfo = 0.5f * (std::sin (phaserPhase) + 1.0f);
+            const double currentOctaveOffset = (static_cast<double> (currentLfo) - 0.5)
+                                             * 2.0 * static_cast<double> (sweepDepth);
+
+            auto graphArea = bounds.reduced (0.0f, 2.0f);
+            const auto frequencyLabels = graphArea.removeFromBottom (12.0f);
+            const auto responseArea = graphArea;
+            constexpr float minDb = -48.0f;
+            constexpr float maxDb = 3.0f;
+            constexpr int sweepSamples = 24;
+
+            auto responseAt = [=] (double frequency, double octaveOffset)
+            {
+                const double omega = 2.0 * juce::MathConstants<double>::pi
+                                   * frequency / sampleRate;
+                const std::complex<double> z1 = std::polar (1.0, -omega);
+                const std::complex<double> z2 = z1 * z1;
+                std::complex<double> allPassResponse { 1.0, 0.0 };
+                const double frequencyScale = std::exp2 (octaveOffset);
+
+                for (int stage = 0; stage < stageCount; ++stage)
+                {
+                    const double stagePosition = static_cast<double> (stage)
+                                               / static_cast<double> (stageCount - 1);
+                    const double centerFrequency = std::min (
+                        minimumFrequency * std::exp (stagePosition * stageLogRange)
+                            * frequencyScale,
+                        sampleRate * 0.45);
+                    const double centerOmega = 2.0 * juce::MathConstants<double>::pi
+                                             * centerFrequency / sampleRate;
+                    const double alpha = std::sin (centerOmega) / (2.0 * 0.7071067811865476);
+                    const double a1 = -2.0 * std::cos (centerOmega) / (1.0 + alpha);
+                    const double a2 = (1.0 - alpha) / (1.0 + alpha);
+                    allPassResponse *= (a2 + a1 * z1 + z2) / (1.0 + a1 * z1 + a2 * z2);
+                }
+
+                return std::abs ((1.0 - static_cast<double> (wetMix))
+                               + static_cast<double> (wetMix) * allPassResponse);
+            };
+
+            const float maximumDisplayFrequency = juce::jmax (
+                20.0f, static_cast<float> (std::min (20000.0, sampleRate * 0.5)));
+            const float logFrequencyRange = std::log (maximumDisplayFrequency / 20.0f);
+            const int numPixels = static_cast<int> (responseArea.getWidth());
+            juce::Path currentResponsePath;
+            juce::Path sweepUpperPath;
+            juce::Path sweepLowerPath;
+
+            for (int pixel = 0; pixel < numPixels; ++pixel)
+            {
+                const float proportion = static_cast<float> (pixel)
+                                       / static_cast<float> (juce::jmax (1, numPixels - 1));
+                const double frequency = 20.0 * std::exp (
+                    static_cast<double> (proportion * logFrequencyRange));
+                double lowestMagnitude = 1.0;
+                double highestMagnitude = 0.0;
+                for (int sweep = 0; sweep < sweepSamples; ++sweep)
+                {
+                    const double lfo = 0.5 * (std::sin (
+                        2.0 * juce::MathConstants<double>::pi * static_cast<double> (sweep)
+                        / static_cast<double> (sweepSamples - 1)) + 1.0);
+                    const double octaveOffset = (lfo - 0.5) * 2.0 * static_cast<double> (sweepDepth);
+                    const double magnitude = responseAt (frequency, octaveOffset);
+                    lowestMagnitude = std::min (lowestMagnitude, magnitude);
+                    highestMagnitude = std::max (highestMagnitude, magnitude);
+                }
+
+                const double currentMagnitude = responseAt (frequency, currentOctaveOffset);
+                const auto toY = [&responseArea] (double magnitude)
+                {
+                    constexpr double low = -48.0;
+                    constexpr double high = 3.0;
+                    const double db = 20.0 * std::log10 (std::max (magnitude, 1.0e-5));
+                    const double normalized = juce::jlimit (0.0, 1.0, (db - low) / (high - low));
+                    return responseArea.getBottom() - static_cast<float> (normalized)
+                         * responseArea.getHeight();
+                };
+                const float currentY = toY (currentMagnitude);
+                const float upperY = toY (highestMagnitude);
+                const float lowerY = toY (lowestMagnitude);
+                const float x = responseArea.getX() + static_cast<float> (pixel);
+                if (pixel == 0)
+                {
+                    currentResponsePath.startNewSubPath (x, currentY);
+                    sweepUpperPath.startNewSubPath (x, upperY);
+                    sweepLowerPath.startNewSubPath (x, lowerY);
+                }
+                else
+                {
+                    currentResponsePath.lineTo (x, currentY);
+                    sweepUpperPath.lineTo (x, upperY);
+                    sweepLowerPath.lineTo (x, lowerY);
+                }
+            }
+
+            g.setColour (juce::Colours::grey.withAlpha (0.3f));
+            const float zeroDbY = responseArea.getBottom()
+                                - ((0.0f - minDb) / (maxDb - minDb)) * responseArea.getHeight();
+            g.drawHorizontalLine (static_cast<int> (zeroDbY), responseArea.getX(), responseArea.getRight());
+            g.setColour (juce::Colours::magenta.withAlpha (0.22f));
+            g.strokePath (sweepUpperPath, juce::PathStrokeType (1.0f));
+            g.strokePath (sweepLowerPath, juce::PathStrokeType (1.0f));
+            g.setColour (juce::Colours::cyan);
+            g.strokePath (currentResponsePath, juce::PathStrokeType (1.8f));
+
+            constexpr std::array<float, 5> frequencies { 20.0f, 100.0f, 500.0f, 2000.0f, 8000.0f };
+            for (const float frequency : frequencies)
+            {
+                if (frequency > maximumDisplayFrequency)
+                    continue;
+                const float x = responseArea.getX()
+                    + std::log (frequency / 20.0f) / logFrequencyRange * responseArea.getWidth();
+                g.setColour (juce::Colours::grey.withAlpha (0.35f));
+                g.drawVerticalLine (static_cast<int> (x), responseArea.getY(), responseArea.getBottom());
+                g.setColour (juce::Colours::lightgrey.withAlpha (0.8f));
+                const juce::String label = frequency >= 1000.0f
+                                         ? juce::String (frequency / 1000.0f, 0) + "k"
+                                         : juce::String (static_cast<int> (frequency));
+                g.drawText (label, juce::Rectangle<int> (static_cast<int> (x - 16.0f),
+                                                          static_cast<int> (frequencyLabels.getY()),
+                                                          32, 12),
+                            juce::Justification::centred, false);
+            }
+
+            g.setFont (juce::FontOptions (9.0f));
+            g.setColour (juce::Colours::cyan);
+            g.drawText ("Current", bounds.toNearestInt().removeFromLeft (52),
+                        juce::Justification::left, false);
+            g.setColour (juce::Colours::magenta);
+            g.drawText ("Sweep", juce::Rectangle<int> (
+                            static_cast<int> (bounds.getX() + 54.0f),
+                            static_cast<int> (bounds.getY()), 42, 12),
+                        juce::Justification::left, false);
+            return;
+        }
 
         if (!analysisReady)
         {

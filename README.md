@@ -1,8 +1,8 @@
 # Universal Comb Filter
 
-Universal Comb Filter is a JUCE audio effect plugin with three selectable DSP
-processors: a configurable comb filter, a ring modulator, and a tremolo. The
-plugin is built as a VST3 effect and a JUCE Standalone application.
+Universal Comb Filter is a JUCE audio effect plugin with four selectable DSP
+processors: a configurable comb filter, a ring modulator, a tremolo, and a
+phaser. The plugin is built as a VST3 effect and a JUCE Standalone application.
 
 ## Features and GUI
 
@@ -33,14 +33,23 @@ and Carrier Frequency (Hz).
 Tremolo modulates the input amplitude. Its controls are Rate (Hz), Depth (%),
 and Waveform (Sine, Triangle, or Square).
 
+### Phaser
+
+The Phaser cascades 2-8 second-order all-pass sections and blends their output
+with the dry signal. Its controls set the number of sections (notches), LFO rate
+(0.05-8 Hz), sweep depth (up to a two-octave movement), and wet mix. The LFO
+plot shows sweep position, while the frequency response displays the live
+response and the range traversed by the notches.
+
 ### Visual analysis
 
 - The audio scope displays captured input and output waveforms. In Tremolo mode,
   it also displays the gain envelope.
 - The frequency panel shows the comb response in Comb Filter mode and live
-  input/output spectra in Ring Mod and Tremolo modes.
+  input/output spectra in Ring Mod and Tremolo modes. Phaser mode shows its
+  current response and the response envelope over the LFO sweep.
 - The phase and pole-zero panels show comb-filter information in Comb Filter
-  mode, these plots are inactive in Ring Mod and Tremolo modes.
+  mode; these plots are inactive in Ring Mod, Tremolo, and Phaser modes.
 
 ## Build setup
 
@@ -82,8 +91,9 @@ The project separates the plugin shell, DSP modules, and editor visualizations:
 
 - `source/PluginProcessor.*` owns the APVTS parameter state and DSP instances.
 - `source/Parameters.h` defines the parameter IDs, ranges, and choices.
-- `source/dsp/CombFilter.*`, `RingModulator.*`, and `Tremolo.*` implement the
-  three processors. `Modulator.h` provides modulation for the Comb Filter.
+- `source/dsp/CombFilter.*`, `RingModulator.*`, `Tremolo.*`, and `Phaser.*`
+  implement the four processors. `Modulator.h` provides modulation for the
+  Comb Filter.
 - `source/PluginEditor.*` builds the GUI, attaches controls to APVTS parameters,
   and updates mode-dependent controls and visualizers.
 - `source/gui/` contains the scope, response plots, modulation plot, and Comb

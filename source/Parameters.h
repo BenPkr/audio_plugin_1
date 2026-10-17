@@ -16,6 +16,10 @@ namespace ParameterIDs
     inline const char* modDepth     = "modDepth";
     inline const char* modFrequency = "modFrequency";
     inline const char* tremFrequency = "tremFrequency";
+    inline const char* phaserStages = "phaserStages";
+    inline const char* phaserRate = "phaserRate";
+    inline const char* phaserDepth = "phaserDepth";
+    inline const char* phaserMix = "phaserMix";
 
     // --- Tame / Moorer Toggles ---
     inline const char* autoGain     = "autoGain";
@@ -29,7 +33,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID{ ParameterIDs::mode, 1 }, "Processing Mode",
-        juce::StringArray{ "Comb Filter", "Ring Modulator", "Tremolo" }, 0));
+        juce::StringArray{ "Comb Filter", "Ring Modulator", "Tremolo", "Phaser" }, 0));
 
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID{ ParameterIDs::preset, 1 }, "Preset",
@@ -69,6 +73,21 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{ ParameterIDs::tremFrequency, 1 }, "Tremolo Rate (Hz)",
         juce::NormalisableRange<float>(0.1f, 20.0f, 0.01f, 0.5f), 5.0f));
+
+    layout.add(std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID{ ParameterIDs::phaserStages, 1 }, "Phaser Notches", 2, 8, 4));
+
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{ ParameterIDs::phaserRate, 1 }, "Phaser Rate (Hz)",
+        juce::NormalisableRange<float>(0.05f, 8.0f, 0.01f, 0.5f), 0.5f));
+
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{ ParameterIDs::phaserDepth, 1 }, "Phaser Sweep Depth (%)",
+        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 75.0f));
+
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{ ParameterIDs::phaserMix, 1 }, "Phaser Mix (%)",
+        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 50.0f));
 
     // --- New Tame Toggles ---
     layout.add(std::make_unique<juce::AudioParameterBool>(

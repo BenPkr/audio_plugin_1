@@ -41,6 +41,10 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
     modFrequencyParam = apvts.getRawParameterValue (ParameterIDs::modFrequency);
     tremFrequencyParam = apvts.getRawParameterValue (ParameterIDs::tremFrequency);
     tremWaveformParam = apvts.getRawParameterValue (ParameterIDs::tremWaveform);
+    phaserStagesParam = apvts.getRawParameterValue (ParameterIDs::phaserStages);
+    phaserRateParam = apvts.getRawParameterValue (ParameterIDs::phaserRate);
+    phaserDepthParam = apvts.getRawParameterValue (ParameterIDs::phaserDepth);
+    phaserMixParam = apvts.getRawParameterValue (ParameterIDs::phaserMix);
 }
 
 AudioPluginAudioProcessor::~AudioPluginAudioProcessor()
@@ -119,10 +123,11 @@ void AudioPluginAudioProcessor::prepareToPlay (double sampleRate, int samplesPer
     combFilter.prepare (sampleRate, samplesPerBlock, getTotalNumInputChannels());
     ringModulator.prepare (sampleRate);
     tremolo.prepare (sampleRate);
+    phaser.prepare (sampleRate, getTotalNumInputChannels());
     transitionBuffer.setSize (getTotalNumInputChannels(), samplesPerBlock, false, false, true);
     tremoloGainCapture.resize (static_cast<size_t> (samplesPerBlock));
 
-    currentMode = modeParam ? juce::jlimit (0, 2, static_cast<int> (modeParam->load())) : 0;
+    currentMode = modeParam ? juce::jlimit (0, 3, static_cast<int> (modeParam->load())) : 0;
     transitionFromMode = currentMode;
     transitionSamplesRemaining = 0;
     transitionLengthSamples = juce::jmax (1, static_cast<int> (std::round (sampleRate * 0.01)));
@@ -135,6 +140,7 @@ void AudioPluginAudioProcessor::releaseResources()
     combFilter.reset();
     ringModulator.reset();
     tremolo.reset();
+    phaser.reset();
     transitionSamplesRemaining = 0;
 }
 
@@ -159,7 +165,7 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     juce::ScopedNoDenormals noDenormals;
 
-    const int requestedMode = modeParam ? juce::jlimit (0, 2, static_cast<int> (modeParam->load())) : 0;
+    const int requestedMode = modeParam ? juce::jlimit (0, 3, static_cast<int> (modeParam->load())) : 0;
     const auto writeStart = analysisWriteIndex.load (std::memory_order_relaxed);
     const int numSamples = buffer.getNumSamples();
     float* activeGainOutput = numSamples <= static_cast<int> (tremoloGainCapture.size())
@@ -261,6 +267,14 @@ void AudioPluginAudioProcessor::processMode (juce::AudioBuffer<float>& buffer, i
                 juce::jlimit (0, 2, tremWaveformParam ? static_cast<int> (tremWaveformParam->load()) : 0)));
             tremolo.processBlock (buffer, gainOutput);
             break;
+
+        case 3:
+            phaser.setStages (phaserStagesParam ? static_cast<int> (phaserStagesParam->load()) : 4);
+            phaser.setRateHz (phaserRateParam ? phaserRateParam->load() : 0.5f);
+            phaser.setDepth (phaserDepthParam ? phaserDepthParam->load() * 0.01f : 0.75f);
+            phaser.setMix (phaserMixParam ? phaserMixParam->load() * 0.01f : 0.5f);
+            phaser.processBlock (buffer);
+            break;
     }
 }
 
@@ -271,6 +285,7 @@ void AudioPluginAudioProcessor::resetMode (int mode)
         case 0: combFilter.reset(); break;
         case 1: ringModulator.reset(); break;
         case 2: tremolo.reset(); break;
+        case 3: phaser.reset(); break;
     }
 }
 

@@ -14,6 +14,7 @@ public:
     void paint(juce::Graphics& g) override;
     void resized() override;
     void timerCallback() override;
+    void setProcessingMode(int mode) { processingMode = mode; repaint(); }
 
 private:
     juce::AudioProcessorValueTreeState& valueTreeState;
@@ -23,9 +24,12 @@ private:
     std::atomic<float>* modTypeParam      = nullptr;
     std::atomic<float>* modDepthParam     = nullptr;
     std::atomic<float>* modFrequencyParam = nullptr;
+    std::atomic<float>* phaserRateParam = nullptr;
 
     float guiPhaseTime { 0.0f };
     float noiseFilterState { 0.0f };
+    float phaserPhase { 0.0f };
+    int processingMode { 0 };
 
     static constexpr int numHistoryPoints = 200;
     std::vector<float> signalHistory;

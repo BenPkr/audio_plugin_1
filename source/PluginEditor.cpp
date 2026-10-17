@@ -23,6 +23,7 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
     processorModeBox.addItem ("Comb Filter", 1);
     processorModeBox.addItem ("Ring Mod", 2);
     processorModeBox.addItem ("Tremolo", 3);
+    processorModeBox.addItem ("Phaser", 4);
     addAndMakeVisible (processorModeBox);
     processorModeAttachment = std::make_unique<ComboBoxAttachment> (
         p.apvts, ParameterIDs::mode, processorModeBox);
@@ -75,6 +76,10 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
     setupModeSlider (modeFrequencySlider, modeFrequencyLabel, "Carrier (Hz)");
     setupModeSlider (tremoloFrequencySlider, tremoloFrequencyLabel, "Rate (Hz)");
     setupModeSlider (modeDepthSlider, modeDepthLabel, "Depth (%)");
+    setupModeSlider (phaserMixSlider, phaserMixLabel, "Wet Mix (%)");
+    setupModeSlider (phaserStagesSlider, phaserStagesLabel, "Notches");
+    setupModeSlider (phaserRateSlider, phaserRateLabel, "Rate (Hz)");
+    setupModeSlider (phaserDepthSlider, phaserDepthLabel, "Sweep Depth (%)");
 
     modeBlendSlider.setRange (-1.0, 1.0, 0.01);
     modeBlendSlider.textFromValueFunction = [] (double value)
@@ -88,6 +93,15 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
     modeFrequencySlider.setRange (0.05, 2000.0, 0.05);
     tremoloFrequencySlider.setRange (0.1, 20.0, 0.01);
     modeDepthSlider.setRange (0.0, 100.0, 0.01);
+    phaserMixSlider.setRange (0.0, 100.0, 0.1);
+    phaserStagesSlider.setRange (2.0, 8.0, 1.0);
+    phaserRateSlider.setRange (0.05, 8.0, 0.01);
+    phaserDepthSlider.setRange (0.0, 100.0, 0.1);
+    phaserMixSlider.setTextValueSuffix (" %");
+    phaserStagesSlider.setNumDecimalPlacesToDisplay (0);
+    phaserStagesSlider.setTextValueSuffix (" stages");
+    phaserRateSlider.setTextValueSuffix (" Hz");
+    phaserDepthSlider.setTextValueSuffix (" %");
     modeBlendAttachment = std::make_unique<SliderAttachment> (p.apvts, ParameterIDs::blend, modeBlendSlider);
     modeFrequencyAttachment = std::make_unique<SliderAttachment> (
         p.apvts, ParameterIDs::modFrequency, modeFrequencySlider);
@@ -95,6 +109,14 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
         p.apvts, ParameterIDs::tremFrequency, tremoloFrequencySlider);
     modeDepthAttachment = std::make_unique<SliderAttachment> (
         p.apvts, ParameterIDs::modDepth, modeDepthSlider);
+    phaserMixAttachment = std::make_unique<SliderAttachment> (
+        p.apvts, ParameterIDs::phaserMix, phaserMixSlider);
+    phaserStagesAttachment = std::make_unique<SliderAttachment> (
+        p.apvts, ParameterIDs::phaserStages, phaserStagesSlider);
+    phaserRateAttachment = std::make_unique<SliderAttachment> (
+        p.apvts, ParameterIDs::phaserRate, phaserRateSlider);
+    phaserDepthAttachment = std::make_unique<SliderAttachment> (
+        p.apvts, ParameterIDs::phaserDepth, phaserDepthSlider);
 
     tremWaveformLabel.setText ("Waveform", juce::dontSendNotification);
     tremWaveformLabel.setJustificationType (juce::Justification::centred);
@@ -134,7 +156,7 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
 
     presetPanelsReady = true;
     const auto* initialMode = p.apvts.getRawParameterValue (ParameterIDs::mode);
-    lastGuiMode = initialMode != nullptr ? juce::jlimit (0, 2, static_cast<int> (initialMode->load())) : 0;
+    lastGuiMode = initialMode != nullptr ? juce::jlimit (0, 3, static_cast<int> (initialMode->load())) : 0;
     updateGuiElementStates (lastGuiMode);
     updateActivePanel (static_cast<int> (modeDial.getValue()));
 
@@ -172,7 +194,7 @@ void AudioPluginAudioProcessorEditor::updateActivePanel (int activeIndex)
 void AudioPluginAudioProcessorEditor::timerCallback()
 {
     const auto* mode = audioProcessor.apvts.getRawParameterValue (ParameterIDs::mode);
-    const int activeMode = mode != nullptr ? juce::jlimit (0, 2, static_cast<int> (mode->load())) : 0;
+    const int activeMode = mode != nullptr ? juce::jlimit (0, 3, static_cast<int> (mode->load())) : 0;
     if (activeMode != lastGuiMode)
     {
         lastGuiMode = activeMode;
@@ -186,6 +208,7 @@ void AudioPluginAudioProcessorEditor::updateGuiElementStates (int activeMode)
     const bool isComb = activeMode == 0;
     const bool isRing = activeMode == 1;
     const bool isTrem = activeMode == 2;
+    const bool isPhaser = activeMode == 3;
 
     modeDial.setVisible (isComb);
     modeDialLabel.setVisible (isComb);
@@ -198,7 +221,7 @@ void AudioPluginAudioProcessorEditor::updateGuiElementStates (int activeMode)
     chorusPanel->setVisible (isComb);
     doublingPanel->setVisible (isComb);
 
-    const bool hasModeControls = isRing || isTrem;
+    const bool hasModeControls = isRing || isTrem || isPhaser;
     modeControlsGroup.setVisible (hasModeControls);
     modeBlendSlider.setVisible (isRing);
     modeBlendLabel.setVisible (isRing);
@@ -210,8 +233,17 @@ void AudioPluginAudioProcessorEditor::updateGuiElementStates (int activeMode)
     modeDepthLabel.setVisible (isTrem);
     tremWaveformBox.setVisible (isTrem);
     tremWaveformLabel.setVisible (isTrem);
+    phaserMixSlider.setVisible (isPhaser);
+    phaserMixLabel.setVisible (isPhaser);
+    phaserStagesSlider.setVisible (isPhaser);
+    phaserStagesLabel.setVisible (isPhaser);
+    phaserRateSlider.setVisible (isPhaser);
+    phaserRateLabel.setVisible (isPhaser);
+    phaserDepthSlider.setVisible (isPhaser);
+    phaserDepthLabel.setVisible (isPhaser);
 
-    modulationSignalPlot.setVisible (isComb);
+    modulationSignalPlot.setProcessingMode (activeMode);
+    modulationSignalPlot.setVisible (isComb || isPhaser);
     audioScopePlot.setVisible (true);
     frequencyResponsePlot.setProcessingMode (activeMode);
     phaseResponsePlot.setProcessingMode (activeMode);
@@ -282,8 +314,17 @@ void AudioPluginAudioProcessorEditor::resized()
     tremoloFrequencyLabel.setBounds (modeFrequencyLabel.getBounds());
     addControl (modeDepthSlider, modeDepthLabel);
     auto waveformArea = controls.removeFromLeft (controlWidth);
+    auto phaserDepthArea = waveformArea;
     tremWaveformLabel.setBounds (waveformArea.removeFromTop (20));
     tremWaveformBox.setBounds (waveformArea.removeFromTop (26));
+    phaserMixLabel.setBounds (modeBlendLabel.getBounds());
+    phaserMixSlider.setBounds (modeBlendSlider.getBounds());
+    phaserStagesLabel.setBounds (modeFrequencyLabel.getBounds());
+    phaserStagesSlider.setBounds (modeFrequencySlider.getBounds());
+    phaserRateLabel.setBounds (modeDepthLabel.getBounds());
+    phaserRateSlider.setBounds (modeDepthSlider.getBounds());
+    phaserDepthLabel.setBounds (phaserDepthArea.removeFromTop (20));
+    phaserDepthSlider.setBounds (phaserDepthArea);
 
     const int panelW = (panelsArea.getWidth() - 20) / 5;
 

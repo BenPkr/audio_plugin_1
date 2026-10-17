@@ -41,7 +41,9 @@ private:
 
     juce::GroupComponent modeControlsGroup;
     juce::Slider modeBlendSlider, modeFrequencySlider, tremoloFrequencySlider, modeDepthSlider;
+    juce::Slider phaserMixSlider, phaserStagesSlider, phaserRateSlider, phaserDepthSlider;
     juce::Label modeBlendLabel, modeFrequencyLabel, tremoloFrequencyLabel, modeDepthLabel, tremWaveformLabel;
+    juce::Label phaserMixLabel, phaserStagesLabel, phaserRateLabel, phaserDepthLabel;
     juce::ComboBox tremWaveformBox;
 
     // Tame/Moorer Toggles
@@ -65,6 +67,10 @@ private:
     std::unique_ptr<SliderAttachment> tremoloFrequencyAttachment;
     std::unique_ptr<SliderAttachment> modeDepthAttachment;
     std::unique_ptr<ComboBoxAttachment> tremWaveformAttachment;
+    std::unique_ptr<SliderAttachment> phaserMixAttachment;
+    std::unique_ptr<SliderAttachment> phaserStagesAttachment;
+    std::unique_ptr<SliderAttachment> phaserRateAttachment;
+    std::unique_ptr<SliderAttachment> phaserDepthAttachment;
 
     void updateActivePanel (int activeIndex);
     void updateGuiElementStates (int activeMode);
