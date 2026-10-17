@@ -12,6 +12,7 @@ public:
 
     void paint (juce::Graphics& g) override;
     void resized() override;
+    void setProcessingMode (int mode) { processingMode = mode; repaint(); }
 
 private:
     juce::AudioProcessorValueTreeState& valueTreeState;
@@ -32,6 +33,7 @@ private:
     // GUI LFO State Tracking
     float guiPhase { 0.0f };
     float guiNoiseState { 0.0f };
+    int processingMode { 0 };
     juce::Random random;
 
     void timerCallback() override;

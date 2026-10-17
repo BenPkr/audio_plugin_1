@@ -1,5 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include <algorithm>
+#include <cmath>
 
 //==============================================================================
 AudioPluginAudioProcessor::AudioPluginAudioProcessor()
@@ -13,6 +15,8 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
                        ),
        apvts (*this, nullptr, "Parameters", createParameterLayout())
 {
+    modeParam         = apvts.getRawParameterValue (ParameterIDs::mode);
+
     // Cache base parameter pointers
     delayParam       = apvts.getRawParameterValue (ParameterIDs::delay);
     blendParam       = apvts.getRawParameterValue (ParameterIDs::blend);
@@ -28,6 +32,7 @@ AudioPluginAudioProcessor::AudioPluginAudioProcessor()
     modTypeParam      = apvts.getRawParameterValue (ParameterIDs::modType);
     modDepthParam     = apvts.getRawParameterValue (ParameterIDs::modDepth);
     modFrequencyParam = apvts.getRawParameterValue (ParameterIDs::modFrequency);
+    tremWaveformParam = apvts.getRawParameterValue (ParameterIDs::tremWaveform);
 }
 
 AudioPluginAudioProcessor::~AudioPluginAudioProcessor()
@@ -104,12 +109,24 @@ void AudioPluginAudioProcessor::prepareToPlay (double sampleRate, int samplesPer
 {
     // Prepare DSP filter buffer allocation on main thread
     combFilter.prepare (sampleRate, samplesPerBlock, getTotalNumInputChannels());
+    ringModulator.prepare (sampleRate);
+    tremolo.prepare (sampleRate);
+    transitionBuffer.setSize (getTotalNumInputChannels(), samplesPerBlock, false, false, true);
+
+    currentMode = modeParam ? juce::jlimit (0, 2, static_cast<int> (modeParam->load())) : 0;
+    transitionFromMode = currentMode;
+    transitionSamplesRemaining = 0;
+    transitionLengthSamples = juce::jmax (1, static_cast<int> (std::round (sampleRate * 0.01)));
+    resetMode (currentMode);
 }
 
 void AudioPluginAudioProcessor::releaseResources()
 {
     // When playback stops, free up memory
     combFilter.reset();
+    ringModulator.reset();
+    tremolo.reset();
+    transitionSamplesRemaining = 0;
 }
 
 bool AudioPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -133,24 +150,114 @@ void AudioPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     juce::ScopedNoDenormals noDenormals;
 
-    // Update base parameters
-    combFilter.setDelayMs           (delayParam       ? delayParam->load()       : 10.0f);
-    combFilter.setBlend             (blendParam       ? blendParam->load()       : 1.0f);
-    combFilter.setFeedforward       (feedforwardParam ? feedforwardParam->load() : 0.5f);
-    combFilter.setFeedback          (feedbackParam    ? feedbackParam->load()    : 0.0f);
+    const int requestedMode = modeParam ? juce::jlimit (0, 2, static_cast<int> (modeParam->load())) : 0;
+    if (requestedMode != currentMode)
+    {
+        transitionFromMode = currentMode;
+        currentMode = requestedMode;
+        resetMode (currentMode);
+        transitionSamplesRemaining = transitionLengthSamples;
+    }
 
-    // Update Tame / Moorer toggle parameters
-    combFilter.setAutoGainEnabled   (autoGainParam    ? autoGainParam->load() > 0.5f : true);
-    combFilter.setDampingEnabled    (dampingParam     ? dampingParam->load() > 0.5f  : true);
+    if (transitionSamplesRemaining > 0
+        && buffer.getNumChannels() == transitionBuffer.getNumChannels()
+        && buffer.getNumSamples() <= transitionBuffer.getNumSamples())
+    {
+        transitionBuffer.makeCopyOf (buffer, true);
+        processMode (buffer, transitionFromMode);
+        processMode (transitionBuffer, currentMode);
 
-    // Update modulation parameters (using > 0.5f threshold for robust Choice parameter mapping)
-    combFilter.setModEnabled        (modEnableParam    ? modEnableParam->load() > 0.5f : false);
-    combFilter.setModType           (modTypeParam      ? (modTypeParam->load() > 0.5f ? 1 : 0) : 0);
-    combFilter.setModDepthMs        (modDepthParam     ? modDepthParam->load() : 0.0f);
-    combFilter.setModFrequencyHz    (modFrequencyParam ? modFrequencyParam->load() : 1.0f);
+        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+        {
+            const float blend = 1.0f - static_cast<float> (transitionSamplesRemaining)
+                                      / static_cast<float> (transitionLengthSamples);
+            for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+            {
+                const float oldOutput = buffer.getReadPointer (channel)[sample];
+                const float newOutput = transitionBuffer.getReadPointer (channel)[sample];
+                buffer.getWritePointer (channel)[sample] = oldOutput + blend * (newOutput - oldOutput);
+            }
 
-    // Process available input channels
-    combFilter.processBlock (buffer);
+            if (transitionSamplesRemaining > 0)
+                --transitionSamplesRemaining;
+        }
+    }
+    else
+    {
+        if (transitionSamplesRemaining > 0)
+            transitionSamplesRemaining = 0;
+        processMode (buffer, currentMode);
+    }
+
+    if (buffer.getNumChannels() > 0)
+    {
+        const auto writeStart = scopeWriteIndex.load (std::memory_order_relaxed);
+        const auto* output = buffer.getReadPointer (0);
+        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+            scopeSamples[static_cast<size_t> ((writeStart + static_cast<std::uint64_t> (sample)) % scopeBufferSize)]
+                .store (output[sample], std::memory_order_relaxed);
+        scopeWriteIndex.store (writeStart + static_cast<std::uint64_t> (buffer.getNumSamples()), std::memory_order_release);
+    }
+}
+
+void AudioPluginAudioProcessor::processMode (juce::AudioBuffer<float>& buffer, int mode)
+{
+    switch (mode)
+    {
+        case 0:
+            combFilter.setDelayMs           (delayParam       ? delayParam->load()       : 10.0f);
+            combFilter.setBlend             (blendParam       ? blendParam->load()       : 1.0f);
+            combFilter.setFeedforward       (feedforwardParam ? feedforwardParam->load() : 0.5f);
+            combFilter.setFeedback          (feedbackParam    ? feedbackParam->load()    : 0.0f);
+            combFilter.setAutoGainEnabled   (autoGainParam    ? autoGainParam->load() > 0.5f : true);
+            combFilter.setDampingEnabled    (dampingParam     ? dampingParam->load() > 0.5f : true);
+            combFilter.setModEnabled        (modEnableParam   ? modEnableParam->load() > 0.5f : false);
+            combFilter.setModType           (modTypeParam     ? (modTypeParam->load() > 0.5f ? 1 : 0) : 0);
+            combFilter.setModDepthMs        (modDepthParam    ? modDepthParam->load() : 0.0f);
+            combFilter.setModFrequencyHz    (modFrequencyParam ? modFrequencyParam->load() : 1.0f);
+            combFilter.processBlock (buffer);
+            break;
+
+        case 1:
+            ringModulator.setCarrierFrequency (modFrequencyParam ? modFrequencyParam->load() : 440.0f);
+            ringModulator.setMix (blendParam ? 0.5f * (blendParam->load() + 1.0f) : 1.0f);
+            ringModulator.processBlock (buffer);
+            break;
+
+        case 2:
+            tremolo.setFrequencyHz (modFrequencyParam ? modFrequencyParam->load() : 5.0f);
+            tremolo.setDepth (modDepthParam ? modDepthParam->load() * 0.01f : 0.8f);
+            tremolo.setWaveform (static_cast<Tremolo::Waveform> (
+                juce::jlimit (0, 2, tremWaveformParam ? static_cast<int> (tremWaveformParam->load()) : 0)));
+            tremolo.processBlock (buffer);
+            break;
+    }
+}
+
+void AudioPluginAudioProcessor::resetMode (int mode)
+{
+    switch (mode)
+    {
+        case 0: combFilter.reset(); break;
+        case 1: ringModulator.reset(); break;
+        case 2: tremolo.reset(); break;
+    }
+}
+
+int AudioPluginAudioProcessor::copyScopeSamples (float* destination, int maxSamples) const
+{
+    if (destination == nullptr || maxSamples <= 0)
+        return 0;
+
+    const auto end = scopeWriteIndex.load (std::memory_order_acquire);
+    const auto count = static_cast<int> (std::min<std::uint64_t> (
+        static_cast<std::uint64_t> (maxSamples), std::min<std::uint64_t> (end, scopeBufferSize)));
+    const auto start = end - static_cast<std::uint64_t> (count);
+    for (int sample = 0; sample < count; ++sample)
+        destination[sample] = scopeSamples[static_cast<size_t> (
+            (start + static_cast<std::uint64_t> (sample)) % scopeBufferSize)].load (std::memory_order_relaxed);
+
+    return count;
 }
 
 //==============================================================================

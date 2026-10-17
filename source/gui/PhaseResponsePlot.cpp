@@ -29,7 +29,7 @@ PhaseResponsePlot::~PhaseResponsePlot()
 void PhaseResponsePlot::timerCallback()
 {
     constexpr float dt = 0.033f;
-    const float modFreq = modFrequencyParam ? modFrequencyParam->load() : 1.0f;
+    const float modFreq = modFrequencyParam ? juce::jlimit (0.05f, 20.0f, modFrequencyParam->load()) : 1.0f;
     const float modType = modTypeParam      ? modTypeParam->load()      : 0.0f;
 
     if (modType < 0.5f) // Sine
@@ -62,6 +62,13 @@ void PhaseResponsePlot::paint (juce::Graphics& g)
     g.setColour (juce::Colours::lightgrey);
     g.setFont (juce::FontOptions (11.0f));
     g.drawText ("Phase Response (Radians)", bounds.removeFromTop (16.0f), juce::Justification::left, false);
+
+    if (processingMode != 0)
+    {
+        g.setColour (juce::Colours::grey);
+        g.drawText ("Not applicable outside Comb Filter mode", bounds, juce::Justification::centred, true);
+        return;
+    }
 
     const float delayMs    = delayParam       ? delayParam->load()       : 10.0f;
     const float BL         = blendParam       ? blendParam->load()       : 1.0f;

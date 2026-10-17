@@ -39,7 +39,8 @@ void ModulationSignalPlot::timerCallback()
     {
         if (type == 0) // Sine LFO
         {
-            currentVal = 0.5f * (std::sin(2.0f * static_cast<float>(M_PI) * freq * guiPhaseTime) + 1.0f) * depth;
+            const float combRate = juce::jlimit(0.05f, 20.0f, freq);
+            currentVal = 0.5f * (std::sin(2.0f * static_cast<float>(M_PI) * combRate * guiPhaseTime) + 1.0f) * depth;
         }
         else // Lowpass Noise Mode
         {

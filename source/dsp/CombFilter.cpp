@@ -58,7 +58,7 @@ void CombFilter::setDampingEnabled(bool enabled)        { dampingEnabled = enabl
 void CombFilter::setModEnabled(bool enabled)        { modEnabled = enabled; }
 void CombFilter::setModType(int typeIndex)         { modulator.setType(static_cast<Modulator::Type>(typeIndex)); }
 void CombFilter::setModDepthMs(float depthMs)       { modulator.setDepthMs(depthMs); }
-void CombFilter::setModFrequencyHz(float freqHz)   { modulator.setFrequency(freqHz); }
+void CombFilter::setModFrequencyHz(float freqHz)   { modulator.setFrequency(juce::jlimit(0.05f, 20.0f, freqHz)); }
 
 void CombFilter::processBlock(juce::AudioBuffer<float>& buffer)
 {

@@ -4,6 +4,7 @@
 
 namespace ParameterIDs
 {
+    inline const char* mode         = "mode";
     inline const char* preset       = "preset";
     inline const char* delay        = "delay";
     inline const char* blend        = "blend";
@@ -18,6 +19,7 @@ namespace ParameterIDs
     // --- Tame / Moorer Toggles ---
     inline const char* autoGain     = "autoGain";
     inline const char* damping      = "damping";
+    inline const char* tremWaveform = "tremWaveform";
 }
 
 inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
@@ -25,15 +27,19 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
 
     layout.add(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{ ParameterIDs::mode, 1 }, "Processing Mode",
+        juce::StringArray{ "Comb Filter", "Ring Modulator", "Tremolo" }, 0));
+
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID{ ParameterIDs::preset, 1 }, "Preset",
         juce::StringArray{ "Custom (Free)", "Vibrato", "Flanger", "Chorus", "Doubling" }, 0));
 
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{ ParameterIDs::delay, 1 }, "Delay (ms)", 
-        juce::NormalisableRange<float>(0.1f, 100.0f, 0.01f), 10.0f));
+        juce::NormalisableRange<float>(0.0f, 100.0f, 0.01f), 10.0f));
 
     layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{ ParameterIDs::blend, 1 }, "Blend (BL)", 
+        juce::ParameterID{ ParameterIDs::blend, 1 }, "Blend / Ring Mix", 
         juce::NormalisableRange<float>(-1.0f, 1.0f, 0.01f), 1.0f));
 
     layout.add(std::make_unique<juce::AudioParameterFloat>(
@@ -52,12 +58,12 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
         juce::StringArray{ "Sine", "Lowpass Noise" }, 0));
 
     layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{ ParameterIDs::modDepth, 1 }, "Mod Depth (ms)", 
+        juce::ParameterID{ ParameterIDs::modDepth, 1 }, "Modulation Depth", 
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.01f), 1.0f));
 
     layout.add(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID{ ParameterIDs::modFrequency, 1 }, "Mod Rate (Hz)", 
-        juce::NormalisableRange<float>(0.05f, 20.0f, 0.05f, 0.5f), 1.0f));
+        juce::ParameterID{ ParameterIDs::modFrequency, 1 }, "LFO / Carrier Frequency (Hz)", 
+        juce::NormalisableRange<float>(0.05f, 2000.0f, 0.05f, 0.5f), 1.0f));
 
     // --- New Tame Toggles ---
     layout.add(std::make_unique<juce::AudioParameterBool>(
@@ -65,6 +71,10 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 
     layout.add(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID{ ParameterIDs::damping, 1 }, "Moorer High-Damping", true));
+
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{ ParameterIDs::tremWaveform, 1 }, "Tremolo Waveform",
+        juce::StringArray{ "Sine", "Triangle", "Square" }, 0));
 
     return layout;
 }

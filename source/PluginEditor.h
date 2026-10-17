@@ -8,8 +8,10 @@
 #include "gui/PoleZeroPlot.h"
 #include "gui/ModulationSignalPlot.h"
 #include "gui/PresetPanel.h"
+#include "gui/AudioScopePlot.h"
 
-class AudioPluginAudioProcessorEditor  : public juce::AudioProcessorEditor
+class AudioPluginAudioProcessorEditor  : public juce::AudioProcessorEditor,
+                                         private juce::Timer
 {
 public:
     explicit AudioPluginAudioProcessorEditor (AudioPluginAudioProcessor&);
@@ -26,10 +28,21 @@ private:
     PhaseResponsePlot phaseResponsePlot;
     PoleZeroPlot poleZeroPlot;
     ModulationSignalPlot modulationSignalPlot;
+    AudioScopePlot audioScopePlot;
 
-    // Mode Selector
+    juce::ComboBox processorModeBox;
+    juce::Label processorModeLabel;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> processorModeAttachment;
+
+    // Existing comb preset selector
     juce::Slider modeDial;
     juce::Label modeDialLabel;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> presetAttachment;
+
+    juce::GroupComponent modeControlsGroup;
+    juce::Slider modeBlendSlider, modeFrequencySlider, modeDepthSlider;
+    juce::Label modeBlendLabel, modeFrequencyLabel, modeDepthLabel, tremWaveformLabel;
+    juce::ComboBox tremWaveformBox;
 
     // Tame/Moorer Toggles
     juce::ToggleButton autoGainButton { "Auto Gain (L2)" };
@@ -43,10 +56,20 @@ private:
     std::unique_ptr<PresetPanel> doublingPanel;
 
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
+    using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
+    using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     std::unique_ptr<ButtonAttachment> autoGainAttachment;
     std::unique_ptr<ButtonAttachment> dampingAttachment;
+    std::unique_ptr<SliderAttachment> modeBlendAttachment;
+    std::unique_ptr<SliderAttachment> modeFrequencyAttachment;
+    std::unique_ptr<SliderAttachment> modeDepthAttachment;
+    std::unique_ptr<ComboBoxAttachment> tremWaveformAttachment;
 
     void updateActivePanel (int activeIndex);
+    void updateGuiElementStates (int activeMode);
+    void timerCallback() override;
+    int lastGuiMode { -1 };
+    bool presetPanelsReady { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessorEditor)
 };
