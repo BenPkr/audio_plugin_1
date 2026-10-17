@@ -58,6 +58,15 @@ void PoleZeroPlot::paint(juce::Graphics& g)
     g.setColour(juce::Colours::darkgrey);
     g.drawRect(getLocalBounds(), 1);
 
+    if (processingMode != 0)
+    {
+        g.setColour (juce::Colours::grey);
+        g.setFont (juce::FontOptions (11.0f));
+        g.drawText ("Not applicable outside Comb Filter mode",
+                    getLocalBounds().reduced (8), juce::Justification::centred, true);
+        return;
+    }
+
     const auto bounds = getLocalBounds().toFloat().reduced(8.0f);
     const float size = std::min(bounds.getWidth(), bounds.getHeight());
     const auto center = bounds.getCentre();

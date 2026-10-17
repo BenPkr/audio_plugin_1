@@ -15,6 +15,7 @@ public:
     void paint(juce::Graphics& g) override;
     void resized() override;
     void timerCallback() override;
+    void setProcessingMode (int mode) { processingMode = mode; repaint(); }
 
 private:
     juce::AudioProcessorValueTreeState& valueTreeState;
@@ -28,6 +29,7 @@ private:
     float lastBlend = -1.0f;
     float lastFF    = -1.0f;
     float lastFB    = -1.0f;
+    int processingMode { 0 };
 
     std::vector<CombMath::Complex> poles;
     std::vector<CombMath::Complex> zeros;

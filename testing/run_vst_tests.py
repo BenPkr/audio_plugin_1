@@ -56,6 +56,7 @@ def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     base_params = {
+        "processing_mode": "Comb Filter",
         "preset": "Custom (Free)",
         "modulation_enable": False,
         "auto_gain_balance_l2": False,
@@ -71,7 +72,7 @@ def main():
     # TEST 1: FIR Mode
     # =========================================================================
     print("Running Test 1: FIR Mode (Feedforward Only)...")
-    p1 = {**base_params, "blend_bl": 1.0, "feedforward_ff": 0.8, "feedback_fb": 0.0, "delay_ms": 2.0}
+    p1 = {**base_params, "blend_ring_mix": 1.0, "feedforward_ff": 0.8, "feedback_fb": 0.0, "delay_ms": 2.0}
     out_fir = process_with_warmup(VST_PATH, p1, impulse_400)
 
     fig, ax = plt.subplots(figsize=(10, 3.8))
@@ -87,7 +88,7 @@ def main():
     # TEST 2: IIR Mode
     # =========================================================================
     print("Running Test 2: IIR Mode (Feedback Only)...")
-    p2 = {**base_params, "blend_bl": 1.0, "feedforward_ff": 0.0, "feedback_fb": -0.7, "delay_ms": 2.0}
+    p2 = {**base_params, "blend_ring_mix": 1.0, "feedforward_ff": 0.0, "feedback_fb": -0.7, "delay_ms": 2.0}
     out_iir = process_with_warmup(VST_PATH, p2, impulse_400)
 
     fig, ax = plt.subplots(figsize=(10, 3.8))
@@ -103,7 +104,7 @@ def main():
     # TEST 3: Universal / All-Pass Mode
     # =========================================================================
     print("Running Test 3: Universal / All-Pass Baseline Mode...")
-    p3 = {**base_params, "blend_bl": 0.7, "feedforward_ff": 1.0, "feedback_fb": -0.7, "delay_ms": 2.0}
+    p3 = {**base_params, "blend_ring_mix": 0.7, "feedforward_ff": 1.0, "feedback_fb": -0.7, "delay_ms": 2.0}
     out_allpass = process_with_warmup(VST_PATH, p3, impulse_400)
 
     fig, ax = plt.subplots(figsize=(10, 3.8))
@@ -119,10 +120,10 @@ def main():
     # TEST 4: Moorer Damping Effect
     # =========================================================================
     print("Running Test 4: Moorer Damping Comparison...")
-    p4a = {**base_params, "blend_bl": 1.0, "feedforward_ff": 0.0, "feedback_fb": 0.85, "delay_ms": 2.0, "moorer_high_damping": False}
+    p4a = {**base_params, "blend_ring_mix": 1.0, "feedforward_ff": 0.0, "feedback_fb": 0.85, "delay_ms": 2.0, "moorer_high_damping": False}
     out_damp_off = process_with_warmup(VST_PATH, p4a, impulse_400)
 
-    p4b = {**base_params, "blend_bl": 1.0, "feedforward_ff": 0.0, "feedback_fb": 0.85, "delay_ms": 2.0, "moorer_high_damping": True}
+    p4b = {**base_params, "blend_ring_mix": 1.0, "feedforward_ff": 0.0, "feedback_fb": 0.85, "delay_ms": 2.0, "moorer_high_damping": True}
     out_damp_on = process_with_warmup(VST_PATH, p4b, impulse_400)
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 5.5))
@@ -166,8 +167,8 @@ def main():
     rms_on = []
 
     for fb in fb_range:
-        p_off = {**base_params, "blend_bl": 1.0, "feedforward_ff": 0.0, "feedback_fb": float(fb), "auto_gain_balance_l2": False}
-        p_on  = {**base_params, "blend_bl": 1.0, "feedforward_ff": 0.0, "feedback_fb": float(fb), "auto_gain_balance_l2": True}
+        p_off = {**base_params, "blend_ring_mix": 1.0, "feedforward_ff": 0.0, "feedback_fb": float(fb), "auto_gain_balance_l2": False}
+        p_on  = {**base_params, "blend_ring_mix": 1.0, "feedforward_ff": 0.0, "feedback_fb": float(fb), "auto_gain_balance_l2": True}
 
         out_off = process_with_warmup(VST_PATH, p_off, white_noise)
         out_on  = process_with_warmup(VST_PATH, p_on, white_noise)
@@ -212,15 +213,14 @@ def main():
     flanger_params = {
         "preset": "Flanger",
         "modulation_enable": True,
-        "blend_bl": 0.7,
+        "blend_ring_mix": 0.7,
         "feedforward_ff": 0.7,
         "feedback_fb": 0.7,
         "delay_ms": 1.5,
-        "mod_depth_ms": 1.0,
-        "mod_rate_hz": 0.4
+        "modulation_depth": 1.0,
+        "lfo_carrier_frequency_hz": 0.4
     }
-    valid_flanger = {k: v for k, v in flanger_params.items() if hasattr(load_plugin(VST_PATH), k)}
-    out_flanger = process_with_warmup(VST_PATH, valid_flanger, noise_3s)
+    out_flanger = process_with_warmup(VST_PATH, flanger_params, noise_3s)
 
     f_in, t_in, S_in = signal.spectrogram(noise_3s, fs=SAMPLE_RATE, nperseg=1024, noverlap=512)
     f_out, t_out, S_out = signal.spectrogram(out_flanger, fs=SAMPLE_RATE, nperseg=1024, noverlap=512)
@@ -267,22 +267,22 @@ def main():
         "Vibrato": {
             "preset": "Vibrato",
             "modulation_enable": True,
-            "blend_bl": 0.0,
+            "blend_ring_mix": 0.0,
             "feedforward_ff": 1.0,
             "feedback_fb": 0.0,
             "delay_ms": 0.1,
-            "mod_depth_ms": 3.0,
-            "mod_rate_hz": 5.0
+            "modulation_depth": 3.0,
+            "lfo_carrier_frequency_hz": 5.0
         },
         "Chorus": {
             "preset": "Chorus",
             "modulation_enable": True,
-            "blend_bl": 0.7,
+            "blend_ring_mix": 0.7,
             "feedforward_ff": 1.0,
             "feedback_fb": 0.0,
             "delay_ms": 20.0,
-            "mod_depth_ms": 30.0,
-            "mod_rate_hz": 1.2
+            "modulation_depth": 30.0,
+            "lfo_carrier_frequency_hz": 1.2
         }
     }
 
@@ -303,8 +303,7 @@ def main():
     phase_records = []
 
     for idx, (profile_name, params) in enumerate(target_profiles.items(), 2):
-        valid_params = {k: v for k, v in params.items() if hasattr(load_plugin(VST_PATH), k)}
-        out_target = process_with_warmup(VST_PATH, valid_params, harmonic_signal)
+        out_target = process_with_warmup(VST_PATH, params, harmonic_signal)
 
         f_out, t_out, Z_out = signal.stft(out_target, fs=SAMPLE_RATE, nperseg=2048, noverlap=1024)
         power_out_db = 10 * np.log10(np.abs(Z_out)**2 + 1e-12)
@@ -334,7 +333,207 @@ def main():
 
     pd.DataFrame(phase_records).to_csv(os.path.join(OUTPUT_DIR, "test7_phase_analysis_matrix.csv"), index=False)
 
-    print("\nAll 7 Verification Tests Completed Successfully!")
+    # =========================================================================
+    # TEST 8: Tremolo Envelope
+    # =========================================================================
+    print("Running Test 8: Tremolo Envelope Verification...")
+    tremolo_duration = 3.0
+    tremolo_time = np.linspace(0.0, tremolo_duration, int(SAMPLE_RATE * tremolo_duration), endpoint=False)
+    tremolo_input_frequency = 110.0
+    tremolo_input_amplitude = 0.2
+    tremolo_rate = 5.0
+    tremolo_depth = 0.8
+    tremolo_input = (
+        tremolo_input_amplitude * np.sin(2.0 * np.pi * tremolo_input_frequency * tremolo_time)
+    ).astype(np.float32)
+    tremolo_output = process_with_warmup(
+        VST_PATH,
+        {
+            "processing_mode": "Tremolo",
+            "tremolo_rate_hz": tremolo_rate,
+            "modulation_depth": 80.0,
+            "tremolo_waveform": "Sine",
+        },
+        tremolo_input,
+    )
+    visible_duration = 0.5
+    visible_samples = int(SAMPLE_RATE * visible_duration)
+    visible_time = tremolo_time[:visible_samples]
+    phase = ((np.arange(visible_samples) + 1024) * tremolo_rate / SAMPLE_RATE) % 1.0
+    expected_lfo = 0.5 * (np.sin(2.0 * np.pi * phase) + 1.0)
+    expected_gain = 1.0 - tremolo_depth * (1.0 - expected_lfo)
+    expected_envelope = tremolo_input_amplitude * expected_gain
+
+    fig, (input_ax, output_ax) = plt.subplots(2, 1, figsize=(12, 7), sharex=True)
+    input_ax.plot(
+        visible_time,
+        tremolo_input[:visible_samples],
+        color="tab:orange",
+        alpha=0.8,
+        label="Input",
+    )
+    input_ax.set_title("Input")
+    input_ax.set_ylabel("Amplitude")
+    input_ax.grid(True, alpha=0.3)
+    input_ax.legend(loc="upper right")
+
+    output_ax.plot(
+        visible_time,
+        tremolo_output[:visible_samples],
+        color="tab:blue",
+        linewidth=1.0,
+        label="Tremolo output",
+    )
+    output_ax.plot(
+        visible_time,
+        expected_envelope,
+        "k--",
+        linewidth=1.0,
+        label="Expected output envelope",
+    )
+    output_ax.plot(visible_time, -expected_envelope, "k--", linewidth=1.0)
+    output_ax.set_title("Tremolo output with expected gain envelope")
+    output_ax.set_xlabel("Time (s)")
+    output_ax.set_ylabel("Amplitude")
+    output_ax.grid(True, alpha=0.3)
+    output_ax.legend(loc="upper right")
+    fig.suptitle("8a. Tremolo Waveforms (110 Hz Input, 5 Hz LFO, 80% Depth)")
+    fig.tight_layout()
+    fig.savefig(os.path.join(OUTPUT_DIR, "test8_tremolo_time_domain.png"), dpi=300)
+    plt.close()
+
+    # =========================================================================
+    # TEST 9: Ring Modulator Beat Pattern and Sidebands
+    # =========================================================================
+    print("Running Test 9: Ring Modulator Beat Pattern and Sideband Verification...")
+    ring_input_frequency = 10.0
+    ring_carrier_frequency = 440.0
+    ring_duration = 3.0
+    ring_time = np.linspace(0.0, ring_duration, int(SAMPLE_RATE * ring_duration), endpoint=False)
+    ring_input_amplitude = 0.2
+    ring_input = (
+        ring_input_amplitude * np.sin(2.0 * np.pi * ring_input_frequency * ring_time)
+    ).astype(np.float32)
+    ring_params = {
+        "processing_mode": "Ring Modulator",
+        "blend_ring_mix": 1.0,
+        "lfo_carrier_frequency_hz": ring_carrier_frequency,
+    }
+    ring_output = process_with_warmup(VST_PATH, ring_params, ring_input)
+
+    ring_visible_duration = 0.4
+    ring_visible_samples = int(SAMPLE_RATE * ring_visible_duration)
+    ring_visible_time = ring_time[:ring_visible_samples]
+    ring_beat_nulls = np.arange(
+        0.0, ring_visible_duration, 1.0 / (2.0 * ring_input_frequency)
+    )
+
+    fig, (input_ax, output_ax) = plt.subplots(2, 1, figsize=(12, 7), sharex=True)
+    input_ax.plot(
+        ring_visible_time,
+        ring_input[:ring_visible_samples],
+        color="tab:orange",
+        alpha=0.75,
+        label=f"Input ({ring_input_frequency:.0f} Hz)",
+    )
+    input_ax.set_title("Input")
+    input_ax.set_ylabel("Amplitude")
+    input_ax.grid(True, alpha=0.3)
+    input_ax.legend(loc="upper right")
+
+    output_ax.plot(
+        ring_visible_time,
+        ring_output[:ring_visible_samples],
+        color="tab:blue",
+        linewidth=1.0,
+        label="Ring Mod output",
+    )
+    for index, beat_null in enumerate(ring_beat_nulls):
+        output_ax.axvline(
+            beat_null,
+            color="tab:red",
+            linestyle="--",
+            alpha=0.45,
+            label="Expected beat-envelope nulls" if index == 0 else None,
+        )
+    output_ax.set_title("Ring Mod output with expected beat-envelope nulls")
+    output_ax.set_xlabel("Time (s)")
+    output_ax.set_ylabel("Amplitude")
+    output_ax.grid(True, alpha=0.3)
+    output_ax.legend(loc="upper right")
+    fig.suptitle(
+        f"9a. Ring Mod Waveforms ({ring_input_frequency:.0f} Hz Input × "
+        f"{ring_carrier_frequency:.0f} Hz Carrier)"
+    )
+    fig.tight_layout()
+    fig.savefig(os.path.join(OUTPUT_DIR, "test9_ringmod_time_domain.png"), dpi=300)
+    plt.close()
+
+    ring_frequencies_in, ring_power_in = signal.periodogram(
+        ring_input, fs=SAMPLE_RATE, nfft=len(ring_input)
+    )
+    ring_frequencies_out, ring_power_out = signal.periodogram(
+        ring_output, fs=SAMPLE_RATE, nfft=len(ring_output)
+    )
+    ring_difference_frequency = abs(ring_carrier_frequency - ring_input_frequency)
+    ring_sum_frequency = ring_carrier_frequency + ring_input_frequency
+
+    fig, (input_ax, output_ax) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+    input_band = ring_frequencies_in <= 1500.0
+    output_band = ring_frequencies_out <= 1500.0
+    input_ax.plot(
+        ring_frequencies_in[input_band],
+        10.0 * np.log10(ring_power_in[input_band] + 1e-15),
+        color="tab:orange",
+        label=f"Input FFT ({ring_input_frequency:.0f} Hz tone)",
+    )
+    input_ax.axvline(
+        ring_input_frequency,
+        color="tab:red",
+        linestyle="--",
+        alpha=0.75,
+        label=f"Input tone: {ring_input_frequency:.0f} Hz",
+    )
+    input_ax.set_title(f"Input spectrum: {ring_input_frequency:.0f} Hz tone")
+    input_ax.set_ylabel("Power (dB)")
+    input_ax.grid(True, alpha=0.3)
+    input_ax.legend(loc="upper right")
+
+    output_ax.plot(
+        ring_frequencies_out[output_band],
+        10.0 * np.log10(ring_power_out[output_band] + 1e-15),
+        color="tab:blue",
+        label="Ring Mod output FFT",
+    )
+    for index, (frequency, label) in enumerate((
+        (ring_difference_frequency, f"Expected difference: {ring_difference_frequency:.0f} Hz"),
+        (ring_sum_frequency, f"Expected sum: {ring_sum_frequency:.0f} Hz"),
+    )):
+        output_ax.axvline(
+            frequency,
+            color="tab:red",
+            linestyle="--",
+            alpha=0.75,
+            label=label,
+        )
+    output_ax.set_title(
+        f"Ring Mod output spectrum with expected sidebands "
+        f"at {ring_difference_frequency:.0f} Hz and {ring_sum_frequency:.0f} Hz"
+    )
+    output_ax.set_xlim(0.0, 1500.0)
+    output_ax.set_xlabel("Frequency (Hz)")
+    output_ax.set_ylabel("Power (dB)")
+    output_ax.grid(True, alpha=0.3)
+    output_ax.legend(loc="upper right")
+    fig.suptitle(
+        f"9b. Ring Mod Input and Output FFT "
+        f"({ring_input_frequency:.0f} Hz Input × {ring_carrier_frequency:.0f} Hz Carrier)"
+    )
+    fig.tight_layout()
+    fig.savefig(os.path.join(OUTPUT_DIR, "test9_ringmod_fft.png"), dpi=300)
+    plt.close()
+
+    print("\nAll 9 Verification Tests Completed Successfully!")
     print(f"Generated artifacts in: {OUTPUT_DIR}/")
 
 if __name__ == "__main__":

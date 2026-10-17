@@ -87,6 +87,12 @@ target_sources(UniversalCombFilter
         source/dsp/CombFilter.h
         source/dsp/CombFilter.cpp
         source/dsp/Modulator.h
+        source/dsp/RingModulator.h
+        source/dsp/RingModulator.cpp
+        source/dsp/Tremolo.h
+        source/dsp/Tremolo.cpp
+        source/gui/AudioScopePlot.h
+        source/gui/AudioScopePlot.cpp
         source/gui/FrequencyResponsePlot.h
         source/gui/FrequencyResponsePlot.cpp
         source/gui/PhaseResponsePlot.h
