@@ -39,7 +39,7 @@ void ModulationSignalPlot::timerCallback()
     {
         if (type == 0) // Sine LFO
         {
-            currentVal = std::sin(2.0f * static_cast<float>(M_PI) * freq * guiPhaseTime);
+            currentVal = 0.5f * (std::sin(2.0f * static_cast<float>(M_PI) * freq * guiPhaseTime) + 1.0f) * depth;
         }
         else // Lowpass Noise Mode
         {
@@ -48,7 +48,8 @@ void ModulationSignalPlot::timerCallback()
             const float alpha = juce::jlimit(0.01f, 1.0f, 2.0f * static_cast<float>(M_PI) * cutoff * dt);
 
             noiseFilterState += alpha * (white - noiseFilterState);
-            currentVal = juce::jlimit(-1.0f, 1.0f, noiseFilterState * 2.5f);
+            const float bipolarLfo = juce::jlimit(-1.0f, 1.0f, noiseFilterState * 4.0f);
+            currentVal = 0.5f * (bipolarLfo + 1.0f) * depth;
         }
     }
 
@@ -72,24 +73,25 @@ void ModulationSignalPlot::paint(juce::Graphics& g)
     // Title Overlay
     g.setColour(juce::Colours::lightgrey);
     g.setFont(juce::FontOptions(11.0f));
-    g.drawText("Modulation Signal (Time-Domain)", bounds.removeFromTop(16.0f), juce::Justification::left, false);
+    g.drawText("Delay Modulation (0 to Depth)", bounds.removeFromTop(16.0f), juce::Justification::left, false);
 
-    const float centerY = bounds.getCentreY();
-
-    // Center Baseline
+    const float bottomY = bounds.getBottom();
     g.setColour(juce::Colours::grey.withAlpha(0.3f));
-    g.drawHorizontalLine(static_cast<int>(centerY), bounds.getX(), bounds.getRight());
+    g.drawHorizontalLine(static_cast<int>(bottomY), bounds.getX(), bounds.getRight());
 
     const bool enabled = modEnableParam ? (modEnableParam->load() > 0.5f) : false;
+    const float depth = modDepthParam ? modDepthParam->load() : 0.0f;
 
     // Draw Waveform Path
     juce::Path wavePath;
     const float halfHeight = (bounds.getHeight() * 0.45f);
+    const float maxOffset = depth > 0.0f ? depth : 1.0f;
 
     for (size_t i = 0; i < signalHistory.size(); ++i)
     {
         const float x = bounds.getX() + (static_cast<float>(i) / static_cast<float>(numHistoryPoints - 1)) * bounds.getWidth();
-        const float y = centerY - (signalHistory[i] * halfHeight);
+        const float normalizedOffset = juce::jlimit(0.0f, 1.0f, signalHistory[i] / maxOffset);
+        const float y = bottomY - (normalizedOffset * halfHeight * 2.0f);
 
         if (i == 0)
             wavePath.startNewSubPath(x, y);

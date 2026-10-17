@@ -41,7 +41,8 @@ public:
             if (phase >= 2.0f * static_cast<float>(M_PI))
                 phase -= 2.0f * static_cast<float>(M_PI);
 
-            return std::sin(phase) * depthMs;
+            const float bipolarLfo = std::sin(phase);
+            return 0.5f * (bipolarLfo + 1.0f) * depthMs;
         }
         else // Lowpass Noise Mode
         {
@@ -59,7 +60,8 @@ public:
             constexpr float smoothCoeff = 0.001f;
             smoothedNoiseState += smoothCoeff * (rawNoiseState - smoothedNoiseState);
 
-            return juce::jlimit(-1.0f, 1.0f, smoothedNoiseState * 4.0f) * depthMs;
+            const float bipolarLfo = juce::jlimit(-1.0f, 1.0f, smoothedNoiseState * 4.0f);
+            return 0.5f * (bipolarLfo + 1.0f) * depthMs;
         }
     }
 

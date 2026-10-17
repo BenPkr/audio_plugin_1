@@ -2,7 +2,6 @@ CMakeLists.txt.user
 CMakeCache.txt
 CMakeFiles
 CMakeScripts
-Testing
 Makefile
 cmake_install.cmake
 install_manifest.txt
@@ -21,3 +20,10 @@ cmake-build-*
 
 # Mac
 .DS_Store
+
+# Python / Testing artifacts
+testing/venv/
+testing/.venv/
+testing/output/
+testing/__pycache__/
+.pytest_cache/
