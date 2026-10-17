@@ -15,11 +15,11 @@ public:
 
     void prepare(double newSampleRate) { sampleRate = newSampleRate; reset(); }
     void reset() { phase = 0.0; }
-    void setFrequencyHz(float frequency) { frequencyHz = juce::jlimit(0.1f, 2000.0f, frequency); }
+    void setFrequencyHz(float frequency) { frequencyHz = juce::jlimit(0.1f, 20.0f, frequency); }
     void setDepth(float newDepth) { depth = juce::jlimit(0.0f, 1.0f, newDepth); }
     void setWaveform(Waveform newWaveform) { waveform = newWaveform; }
 
-    void processBlock(juce::AudioBuffer<float>& buffer)
+    void processBlock(juce::AudioBuffer<float>& buffer, float* gainOutput = nullptr)
     {
         if (sampleRate <= 0.0)
             return;
@@ -31,6 +31,8 @@ public:
         {
             const float lfo = getUnipolarLfo();
             const float gain = 1.0f - depth * (1.0f - lfo);
+            if (gainOutput != nullptr)
+                gainOutput[sample] = gain;
 
             for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
                 buffer.getWritePointer(channel)[sample] *= gain;

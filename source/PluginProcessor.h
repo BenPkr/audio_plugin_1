@@ -7,6 +7,7 @@
 #include "dsp/Tremolo.h"
 #include <array>
 #include <cstdint>
+#include <vector>
 
 //==============================================================================
 class AudioPluginAudioProcessor  : public juce::AudioProcessor
@@ -23,7 +24,10 @@ public:
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
-    int copyScopeSamples (float* destination, int maxSamples) const;
+    int copyAnalysisSamples (float* inputDestination,
+                             float* outputDestination,
+                             float* gainDestination,
+                             int maxSamples) const;
 
     //==============================================================================
     juce::AudioProcessorEditor* createEditor() override;
@@ -57,9 +61,12 @@ private:
     RingModulator ringModulator;
     Tremolo tremolo;
 
-    static constexpr size_t scopeBufferSize = 2048;
-    std::array<std::atomic<float>, scopeBufferSize> scopeSamples {};
-    std::atomic<std::uint64_t> scopeWriteIndex { 0 };
+    static constexpr size_t analysisBufferSize = 8192;
+    std::array<std::atomic<float>, analysisBufferSize> analysisInputSamples {};
+    std::array<std::atomic<float>, analysisBufferSize> analysisOutputSamples {};
+    std::array<std::atomic<float>, analysisBufferSize> analysisGainSamples {};
+    std::atomic<std::uint64_t> analysisWriteIndex { 0 };
+    std::vector<float> tremoloGainCapture;
     juce::AudioBuffer<float> transitionBuffer;
     int currentMode { 0 };
     int transitionFromMode { 0 };
@@ -82,9 +89,10 @@ private:
     std::atomic<float>* modTypeParam      = nullptr;
     std::atomic<float>* modDepthParam     = nullptr;
     std::atomic<float>* modFrequencyParam = nullptr;
+    std::atomic<float>* tremFrequencyParam = nullptr;
     std::atomic<float>* tremWaveformParam = nullptr;
 
-    void processMode (juce::AudioBuffer<float>& buffer, int mode);
+    void processMode (juce::AudioBuffer<float>& buffer, int mode, float* gainOutput = nullptr);
     void resetMode (int mode);
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioPluginAudioProcessor)

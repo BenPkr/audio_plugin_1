@@ -4,7 +4,7 @@
 AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAudioProcessor& p)
     : AudioProcessorEditor (&p), 
       audioProcessor (p),
-      frequencyResponsePlot (p.apvts),
+      frequencyResponsePlot (p, p.apvts),
       phaseResponsePlot (p.apvts),           // <--- INITIALIZE
       poleZeroPlot (p.apvts),
       modulationSignalPlot (p.apvts),
@@ -72,7 +72,8 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
     };
 
     setupModeSlider (modeBlendSlider, modeBlendLabel, "Ring Mix");
-    setupModeSlider (modeFrequencySlider, modeFrequencyLabel, "Carrier / Rate (Hz)");
+    setupModeSlider (modeFrequencySlider, modeFrequencyLabel, "Carrier (Hz)");
+    setupModeSlider (tremoloFrequencySlider, tremoloFrequencyLabel, "Rate (Hz)");
     setupModeSlider (modeDepthSlider, modeDepthLabel, "Depth (%)");
 
     modeBlendSlider.setRange (-1.0, 1.0, 0.01);
@@ -85,10 +86,13 @@ AudioPluginAudioProcessorEditor::AudioPluginAudioProcessorEditor (AudioPluginAud
         return text.getDoubleValue() * 0.02 - 1.0;
     };
     modeFrequencySlider.setRange (0.05, 2000.0, 0.05);
+    tremoloFrequencySlider.setRange (0.1, 20.0, 0.01);
     modeDepthSlider.setRange (0.0, 100.0, 0.01);
     modeBlendAttachment = std::make_unique<SliderAttachment> (p.apvts, ParameterIDs::blend, modeBlendSlider);
     modeFrequencyAttachment = std::make_unique<SliderAttachment> (
         p.apvts, ParameterIDs::modFrequency, modeFrequencySlider);
+    tremoloFrequencyAttachment = std::make_unique<SliderAttachment> (
+        p.apvts, ParameterIDs::tremFrequency, tremoloFrequencySlider);
     modeDepthAttachment = std::make_unique<SliderAttachment> (
         p.apvts, ParameterIDs::modDepth, modeDepthSlider);
 
@@ -198,9 +202,10 @@ void AudioPluginAudioProcessorEditor::updateGuiElementStates (int activeMode)
     modeControlsGroup.setVisible (hasModeControls);
     modeBlendSlider.setVisible (isRing);
     modeBlendLabel.setVisible (isRing);
-    modeFrequencySlider.setVisible (hasModeControls);
-    modeFrequencyLabel.setVisible (hasModeControls);
-    modeFrequencyLabel.setText (isRing ? "Carrier (Hz)" : "Rate (Hz)", juce::dontSendNotification);
+    modeFrequencySlider.setVisible (isRing);
+    modeFrequencyLabel.setVisible (isRing);
+    tremoloFrequencySlider.setVisible (isTrem);
+    tremoloFrequencyLabel.setVisible (isTrem);
     modeDepthSlider.setVisible (isTrem);
     modeDepthLabel.setVisible (isTrem);
     tremWaveformBox.setVisible (isTrem);
@@ -273,6 +278,8 @@ void AudioPluginAudioProcessorEditor::resized()
     };
     addControl (modeBlendSlider, modeBlendLabel);
     addControl (modeFrequencySlider, modeFrequencyLabel);
+    tremoloFrequencySlider.setBounds (modeFrequencySlider.getBounds());
+    tremoloFrequencyLabel.setBounds (modeFrequencyLabel.getBounds());
     addControl (modeDepthSlider, modeDepthLabel);
     auto waveformArea = controls.removeFromLeft (controlWidth);
     tremWaveformLabel.setBounds (waveformArea.removeFromTop (20));

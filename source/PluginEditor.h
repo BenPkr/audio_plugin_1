@@ -40,8 +40,8 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> presetAttachment;
 
     juce::GroupComponent modeControlsGroup;
-    juce::Slider modeBlendSlider, modeFrequencySlider, modeDepthSlider;
-    juce::Label modeBlendLabel, modeFrequencyLabel, modeDepthLabel, tremWaveformLabel;
+    juce::Slider modeBlendSlider, modeFrequencySlider, tremoloFrequencySlider, modeDepthSlider;
+    juce::Label modeBlendLabel, modeFrequencyLabel, tremoloFrequencyLabel, modeDepthLabel, tremWaveformLabel;
     juce::ComboBox tremWaveformBox;
 
     // Tame/Moorer Toggles
@@ -62,6 +62,7 @@ private:
     std::unique_ptr<ButtonAttachment> dampingAttachment;
     std::unique_ptr<SliderAttachment> modeBlendAttachment;
     std::unique_ptr<SliderAttachment> modeFrequencyAttachment;
+    std::unique_ptr<SliderAttachment> tremoloFrequencyAttachment;
     std::unique_ptr<SliderAttachment> modeDepthAttachment;
     std::unique_ptr<ComboBoxAttachment> tremWaveformAttachment;
 

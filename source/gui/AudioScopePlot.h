@@ -17,8 +17,12 @@ public:
 private:
     AudioPluginAudioProcessor& audioProcessor;
     static constexpr int numPoints = 512;
-    std::array<float, numPoints> samples {};
+    std::array<float, numPoints> inputSamples {};
+    std::array<float, numPoints> outputSamples {};
+    std::array<float, numPoints> gainSamples {};
     int numAvailableSamples { 0 };
+    std::atomic<float>* modeParam { nullptr };
+    bool showGainEnvelope { false };
 
     void timerCallback() override;
 

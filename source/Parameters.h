@@ -15,6 +15,7 @@ namespace ParameterIDs
     inline const char* modType      = "modType";
     inline const char* modDepth     = "modDepth";
     inline const char* modFrequency = "modFrequency";
+    inline const char* tremFrequency = "tremFrequency";
 
     // --- Tame / Moorer Toggles ---
     inline const char* autoGain     = "autoGain";
@@ -64,6 +65,10 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{ ParameterIDs::modFrequency, 1 }, "LFO / Carrier Frequency (Hz)", 
         juce::NormalisableRange<float>(0.05f, 2000.0f, 0.05f, 0.5f), 1.0f));
+
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{ ParameterIDs::tremFrequency, 1 }, "Tremolo Rate (Hz)",
+        juce::NormalisableRange<float>(0.1f, 20.0f, 0.01f, 0.5f), 5.0f));
 
     // --- New Tame Toggles ---
     layout.add(std::make_unique<juce::AudioParameterBool>(

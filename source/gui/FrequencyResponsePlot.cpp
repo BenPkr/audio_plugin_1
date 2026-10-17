@@ -1,10 +1,14 @@
 #include "FrequencyResponsePlot.h"
 #include "../Parameters.h"
+#include "../PluginProcessor.h"
+#include <algorithm>
 #include <cmath>
 #include <complex>
 
-FrequencyResponsePlot::FrequencyResponsePlot (juce::AudioProcessorValueTreeState& apvts)
-    : valueTreeState (apvts)
+FrequencyResponsePlot::FrequencyResponsePlot (AudioPluginAudioProcessor& processor,
+                                              juce::AudioProcessorValueTreeState& apvts)
+    : audioProcessor (processor),
+      valueTreeState (apvts)
 {
     delayParam        = valueTreeState.getRawParameterValue (ParameterIDs::delay);
     blendParam        = valueTreeState.getRawParameterValue (ParameterIDs::blend);
@@ -46,6 +50,64 @@ void FrequencyResponsePlot::timerCallback()
         guiNoiseState += alpha * (white - guiNoiseState);
     }
 
+    if (processingMode != 0)
+    {
+        const int sampleCount = audioProcessor.copyAnalysisSamples (
+            analysisInput.data(), analysisOutput.data(), nullptr, fftSize);
+        analysisReady = sampleCount == fftSize && audioProcessor.getSampleRate() > 0.0;
+
+        if (analysisReady)
+        {
+            double inputEnergy = 0.0;
+            int peakBin = 1;
+            float peakMagnitude = 0.0f;
+            const int minPeakBin = juce::jmax (1, static_cast<int> (std::ceil (
+                40.0 * static_cast<double> (fftSize) / audioProcessor.getSampleRate())));
+
+            for (int i = 0; i < fftSize; ++i)
+            {
+                const float input = analysisInput[static_cast<size_t> (i)];
+                inputEnergy += static_cast<double> (input) * input;
+                const float window = 0.5f - 0.5f * std::cos (
+                    2.0f * juce::MathConstants<float>::pi * static_cast<float> (i)
+                    / static_cast<float> (fftSize - 1));
+                fftData[static_cast<size_t> (i)] = input * window;
+                fftData[static_cast<size_t> (fftSize + i)] = 0.0f;
+            }
+
+            inputRms = static_cast<float> (std::sqrt (inputEnergy / static_cast<double> (fftSize)));
+            fft.performFrequencyOnlyForwardTransform (fftData.data());
+            for (int bin = 0; bin < spectrumSize; ++bin)
+            {
+                const float magnitude = fftData[static_cast<size_t> (bin)] * 4.0f / static_cast<float> (fftSize);
+                inputSpectrum[static_cast<size_t> (bin)] = magnitude;
+                if (bin >= minPeakBin && magnitude > peakMagnitude)
+                {
+                    peakMagnitude = magnitude;
+                    peakBin = bin;
+                }
+            }
+            inputPeakAmplitude = peakMagnitude;
+            inputPeakFrequencyHz = static_cast<float> (peakBin) * static_cast<float> (audioProcessor.getSampleRate())
+                                 / static_cast<float> (fftSize);
+
+            for (int i = 0; i < fftSize; ++i)
+            {
+                const float output = analysisOutput[static_cast<size_t> (i)];
+                const float window = 0.5f - 0.5f * std::cos (
+                    2.0f * juce::MathConstants<float>::pi * static_cast<float> (i)
+                    / static_cast<float> (fftSize - 1));
+                fftData[static_cast<size_t> (i)] = output * window;
+                fftData[static_cast<size_t> (fftSize + i)] = 0.0f;
+            }
+
+            fft.performFrequencyOnlyForwardTransform (fftData.data());
+            for (int bin = 0; bin < spectrumSize; ++bin)
+                outputSpectrum[static_cast<size_t> (bin)] =
+                    fftData[static_cast<size_t> (bin)] * 4.0f / static_cast<float> (fftSize);
+        }
+    }
+
     repaint();
 }
 
@@ -62,12 +124,121 @@ void FrequencyResponsePlot::paint (juce::Graphics& g)
     // Header Title
     g.setColour (juce::Colours::lightgrey);
     g.setFont (juce::FontOptions (11.0f));
-    g.drawText ("Frequency Response (Magnitude)", bounds.removeFromTop (16.0f), juce::Justification::left, false);
+    g.drawText (processingMode == 0 ? "Frequency Response (Magnitude)" : "Live Input / Output Spectrum",
+                bounds.removeFromTop (16.0f), juce::Justification::left, false);
 
     if (processingMode != 0)
     {
-        g.setColour (juce::Colours::grey);
-        g.drawText ("Not applicable outside Comb Filter mode", bounds, juce::Justification::centred, true);
+        g.setColour (juce::Colours::lightgrey);
+        g.drawText (processingMode == 1 ? "Live Spectrum - Ring Modulator" : "Live Spectrum - Tremolo",
+                    bounds.removeFromTop (14.0f), juce::Justification::left, false);
+
+        if (!analysisReady)
+        {
+            g.setColour (juce::Colours::grey);
+            g.drawText ("Waiting for audio...", bounds, juce::Justification::centred, true);
+            return;
+        }
+
+        auto spectrumArea = bounds.reduced (0.0f, 2.0f);
+        const auto annotationBounds = spectrumArea.removeFromTop (12.0f);
+        const auto frequencyLabelBounds = spectrumArea.removeFromBottom (12.0f);
+        const auto spectrumBounds = spectrumArea;
+        constexpr float minDb = -90.0f;
+        constexpr float maxDb = 0.0f;
+        const double sampleRate = audioProcessor.getSampleRate();
+        const float maxFrequency = juce::jmax (
+            20.0f, static_cast<float> (std::min (20000.0, sampleRate * 0.5)));
+        const float logFrequencyRange = std::log (maxFrequency / 20.0f);
+        juce::Path inputPath;
+        juce::Path outputPath;
+        const int numPixels = static_cast<int> (spectrumBounds.getWidth());
+
+        for (int pixel = 0; pixel < numPixels; ++pixel)
+        {
+            const float proportion = static_cast<float> (pixel) / static_cast<float> (juce::jmax (1, numPixels - 1));
+            const float frequency = 20.0f * std::exp (proportion * logFrequencyRange);
+            const int bin = juce::jlimit (1, spectrumSize - 1, static_cast<int> (
+                std::round (frequency * static_cast<float> (fftSize) / static_cast<float> (sampleRate))));
+            const float inputDb = 20.0f * std::log10 (juce::jmax (1.0e-6f, inputSpectrum[static_cast<size_t> (bin)]));
+            const float outputDb = 20.0f * std::log10 (juce::jmax (1.0e-6f, outputSpectrum[static_cast<size_t> (bin)]));
+            const float inputY = spectrumBounds.getBottom()
+                               - juce::jlimit (0.0f, 1.0f, (inputDb - minDb) / (maxDb - minDb))
+                               * spectrumBounds.getHeight();
+            const float outputY = spectrumBounds.getBottom()
+                                - juce::jlimit (0.0f, 1.0f, (outputDb - minDb) / (maxDb - minDb))
+                                * spectrumBounds.getHeight();
+            const float x = spectrumBounds.getX() + static_cast<float> (pixel);
+
+            if (pixel == 0)
+            {
+                inputPath.startNewSubPath (x, inputY);
+                outputPath.startNewSubPath (x, outputY);
+            }
+            else
+            {
+                inputPath.lineTo (x, inputY);
+                outputPath.lineTo (x, outputY);
+            }
+        }
+
+        g.setFont (juce::FontOptions (9.0f));
+        for (const float db : { -20.0f, -40.0f, -60.0f, -80.0f })
+        {
+            const float y = spectrumBounds.getBottom() - (db - minDb) / (maxDb - minDb) * spectrumBounds.getHeight();
+            g.setColour (juce::Colours::grey.withAlpha (0.25f));
+            g.drawHorizontalLine (static_cast<int> (y), spectrumBounds.getX(), spectrumBounds.getRight());
+            g.setColour (juce::Colours::lightgrey.withAlpha (0.7f));
+            g.drawText (juce::String (static_cast<int> (db)), static_cast<int> (spectrumBounds.getX()),
+                        static_cast<int> (y - 9.0f), 28, 10, juce::Justification::left, false);
+        }
+
+        g.setColour (juce::Colours::orange);
+        g.strokePath (inputPath, juce::PathStrokeType (1.2f));
+        g.setColour (juce::Colours::cyan);
+        g.strokePath (outputPath, juce::PathStrokeType (1.5f));
+
+        const bool hasTonalPeak = inputPeakAmplitude > 0.001f && inputPeakAmplitude > inputRms * 1.2f
+                               && inputPeakFrequencyHz >= 40.0f;
+        juce::String analysisText = hasTonalPeak
+            ? "Dominant input peak " + juce::String (inputPeakFrequencyHz, 1) + " Hz"
+            : "No confident tonal peak";
+        if (hasTonalPeak && processingMode == 1 && modFrequencyParam != nullptr)
+        {
+            const float carrier = modFrequencyParam->load();
+            analysisText += " | carrier / peak "
+                          + juce::String (carrier / inputPeakFrequencyHz, 2) + ":1";
+        }
+        g.setColour (juce::Colours::white);
+        g.drawText (analysisText, annotationBounds.toNearestInt(),
+                    juce::Justification::right, false);
+
+        for (const float frequency : { 100.0f, 1000.0f, 10000.0f })
+        {
+            if (frequency > maxFrequency)
+                continue;
+            const float x = spectrumBounds.getX()
+                          + std::log (frequency / 20.0f) / logFrequencyRange * spectrumBounds.getWidth();
+            g.setColour (juce::Colours::grey.withAlpha (0.35f));
+            g.drawVerticalLine (static_cast<int> (x), spectrumBounds.getY(), spectrumBounds.getBottom());
+            g.setColour (juce::Colours::lightgrey.withAlpha (0.8f));
+            const juce::String label = frequency >= 1000.0f
+                                     ? juce::String (frequency / 1000.0f, 0) + "k"
+                                     : juce::String (static_cast<int> (frequency));
+            g.drawText (label, juce::Rectangle<int> (static_cast<int> (x - 16.0f),
+                                                      static_cast<int> (frequencyLabelBounds.getY()),
+                                                      32, 12),
+                        juce::Justification::centred, false);
+        }
+
+        g.setFont (juce::FontOptions (9.0f));
+        g.setColour (juce::Colours::orange);
+        g.drawText ("Input", annotationBounds.toNearestInt().removeFromLeft (45),
+                    juce::Justification::left, false);
+        g.setColour (juce::Colours::cyan);
+        g.drawText ("Output", annotationBounds.toNearestInt().removeFromLeft (90).withX (
+                        static_cast<int> (annotationBounds.getX() + 48.0f)),
+                    juce::Justification::left, false);
         return;
     }
 
