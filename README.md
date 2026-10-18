@@ -124,7 +124,7 @@ The nine scenarios cover:
 2. Comb Filter IIR impulse response
 3. Comb Filter all-pass impulse response
 4. Moorer damping comparison
-5. Auto Gain (L2) feedback sweep
+5. Auto Gain (L-infinity) feedback sweep
 6. Flanger input/output spectrograms
 7. Vibrato and Chorus output spectrograms
 8. Tremolo input/output waveforms and expected gain envelope

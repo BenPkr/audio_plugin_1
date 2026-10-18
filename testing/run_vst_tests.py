@@ -59,7 +59,7 @@ def main():
         "processing_mode": "Comb Filter",
         "preset": "Custom (Free)",
         "modulation_enable": False,
-        "auto_gain_balance_l2": False,
+        "auto_gain_balance_l_infinity": False,
         "moorer_high_damping": False,
     }
 
@@ -155,9 +155,9 @@ def main():
     df_results.to_csv(master_csv_path, index=False)
 
     # =========================================================================
-    # TEST 5: Auto-Gain (L2 Energy Balance Curve)
+    # TEST 5: Auto-Gain (L-infinity Gain Balance Curve)
     # =========================================================================
-    print("Running Test 5: Auto-Gain (L2 Balance Curve Sweep)...")
+    print("Running Test 5: Auto-Gain (L-infinity Balance Curve Sweep)...")
     np.random.seed(42)
     noise_duration = int(SAMPLE_RATE * 1.0)
     white_noise = np.random.normal(0, 0.1, noise_duration).astype(np.float32)
@@ -167,8 +167,8 @@ def main():
     rms_on = []
 
     for fb in fb_range:
-        p_off = {**base_params, "blend_ring_mix": 1.0, "feedforward_ff": 0.0, "feedback_fb": float(fb), "auto_gain_balance_l2": False}
-        p_on  = {**base_params, "blend_ring_mix": 1.0, "feedforward_ff": 0.0, "feedback_fb": float(fb), "auto_gain_balance_l2": True}
+        p_off = {**base_params, "blend_ring_mix": 1.0, "feedforward_ff": 0.0, "feedback_fb": float(fb), "auto_gain_balance_l_infinity": False}
+        p_on  = {**base_params, "blend_ring_mix": 1.0, "feedforward_ff": 0.0, "feedback_fb": float(fb), "auto_gain_balance_l_infinity": True}
 
         out_off = process_with_warmup(VST_PATH, p_off, white_noise)
         out_on  = process_with_warmup(VST_PATH, p_on, white_noise)
@@ -181,12 +181,12 @@ def main():
 
     plt.figure(figsize=(10, 5))
     plt.plot(fb_range, 20 * np.log10(np.array(rms_off) + 1e-12), 'o--', label="Auto-Gain OFF (Unscaled)")
-    plt.plot(fb_range, 20 * np.log10(np.array(rms_on) + 1e-12), 's-', label="Auto-Gain ON (L2 Normalized: g = √(1 - FB²))")
+    plt.plot(fb_range, 20 * np.log10(np.array(rms_on) + 1e-12), 's-', label="Auto-Gain ON (L-infinity Normalized: g = 1 - |FB|)")
     plt.axvline(x=0.0, color='gray', linestyle=':', alpha=0.7, label="FB = 0 (Unity Gain g = 1.0)")
     
-    # Annotate L2 Formula & Unity Gain point
+    # Annotate L-infinity formula and unity gain point.
     plt.annotate(
-        "Unity Gain at FB = 0.0\ng(0) = √(1 - 0²) = 1.0",
+        "Unity Gain at FB = 0.0\ng(0) = 1 - |0| = 1.0",
         xy=(0.0, 20 * np.log10(rms_on[len(rms_on)//2] + 1e-12)),
         xytext=(-0.45, -15),
         arrowprops=dict(facecolor='black', shrink=0.05, width=1, headwidth=5),
@@ -194,7 +194,7 @@ def main():
         bbox=dict(boxstyle="round,pad=0.3", fc="yellow", alpha=0.4)
     )
     
-    plt.title("5. Auto-Gain Balance (L2 Power Preservation vs Feedback)", fontsize=11, fontweight='bold', pad=12)
+    plt.title("5. Auto-Gain Balance (L-infinity Gain Normalization vs Feedback)", fontsize=11, fontweight='bold', pad=12)
     plt.xlabel("Feedback Coefficient (FB)")
     plt.ylabel("RMS Output Level (dB)")
     plt.grid(True, alpha=0.3)
