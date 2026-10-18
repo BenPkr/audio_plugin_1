@@ -248,7 +248,7 @@ void AudioPluginAudioProcessorEditor::updateGuiElementStates (int activeMode)
     frequencyResponsePlot.setProcessingMode (activeMode);
     phaseResponsePlot.setProcessingMode (activeMode);
     poleZeroPlot.setProcessingMode (activeMode);
-    frequencyResponsePlot.setAlpha (isComb ? 1.0f : 0.35f);
+    frequencyResponsePlot.setAlpha (1.0f);
     phaseResponsePlot.setAlpha (isComb ? 1.0f : 0.35f);
     poleZeroPlot.setAlpha (isComb ? 1.0f : 0.35f);
 }

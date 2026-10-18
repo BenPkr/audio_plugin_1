@@ -47,7 +47,7 @@ private:
     juce::ComboBox tremWaveformBox;
 
     // Tame/Moorer Toggles
-    juce::ToggleButton autoGainButton { "Auto Gain (L2)" };
+    juce::ToggleButton autoGainButton { "Auto Gain (L-infinity)" };
     juce::ToggleButton dampingButton  { "Damp Tail" };
 
     // 5 Dedicated Hardware Preset Panels

@@ -20,7 +20,7 @@ The Comb Filter mode includes five parameter presets:
 - Doubling
 
 The preset panels configure the comb filter's delay, blend, feedforward,
-feedback, and modulation settings. The Auto Gain (L2) and Damp Tail controls
+feedback, and modulation settings. The Auto Gain (L-infinity) and Damp Tail controls
 are available in this mode. A modulation plot displays the comb filter's LFO.
 
 ### Ring Modulator

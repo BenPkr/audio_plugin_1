@@ -432,9 +432,9 @@ void FrequencyResponsePlot::paint (juce::Graphics& g)
 
     const float totalDelayMs = juce::jlimit (0.1f, 100.0f, delayMs + modOffsetMs);
 
-    // L2 Normalization factor
+    // Keep the displayed response consistent with the Comb Filter's L-infinity normalization.
     const float absFb = std::abs (FB);
-    const float normScale = autoGainOn ? std::sqrt (1.0f - (absFb * absFb)) : 1.0f;
+    const float normScale = autoGainOn ? 1.0f - absFb : 1.0f;
 
     // Sample rate & delay in samples
     constexpr double fs = 44100.0;

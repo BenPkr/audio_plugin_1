@@ -93,7 +93,7 @@ void PhaseResponsePlot::paint (juce::Graphics& g)
     const float totalDelayMs = juce::jlimit (0.1f, 100.0f, delayMs + modOffsetMs);
 
     const float absFb = std::abs (FB);
-    const float normScale = autoGainOn ? std::sqrt (std::max (0.001f, 1.0f - (absFb * absFb))) : 1.0f;
+    const float normScale = autoGainOn ? 1.0f - absFb : 1.0f;
 
     constexpr double fs = 44100.0;
     const double delaySamples = (totalDelayMs / 1000.0) * fs;

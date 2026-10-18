@@ -91,7 +91,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout
 
     // --- New Tame Toggles ---
     layout.add(std::make_unique<juce::AudioParameterBool>(
-        juce::ParameterID{ ParameterIDs::autoGain, 1 }, "Auto Gain Balance (L2)", true));
+        juce::ParameterID{ ParameterIDs::autoGain, 1 }, "Auto Gain Balance (L-infinity)", true));
 
     layout.add(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID{ ParameterIDs::damping, 1 }, "Moorer High-Damping", true));
