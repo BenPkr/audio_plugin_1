@@ -5,6 +5,7 @@
 #include "dsp/CombFilter.h"
 #include "dsp/RingModulator.h"
 #include "dsp/Tremolo.h"
+#include "dsp/Phaser.h"
 #include <array>
 #include <cstdint>
 #include <vector>
@@ -60,6 +61,7 @@ private:
     CombFilter combFilter;
     RingModulator ringModulator;
     Tremolo tremolo;
+    Phaser phaser;
 
     static constexpr size_t analysisBufferSize = 8192;
     std::array<std::atomic<float>, analysisBufferSize> analysisInputSamples {};
@@ -91,6 +93,10 @@ private:
     std::atomic<float>* modFrequencyParam = nullptr;
     std::atomic<float>* tremFrequencyParam = nullptr;
     std::atomic<float>* tremWaveformParam = nullptr;
+    std::atomic<float>* phaserStagesParam = nullptr;
+    std::atomic<float>* phaserRateParam = nullptr;
+    std::atomic<float>* phaserDepthParam = nullptr;
+    std::atomic<float>* phaserMixParam = nullptr;
 
     void processMode (juce::AudioBuffer<float>& buffer, int mode, float* gainOutput = nullptr);
     void resetMode (int mode);

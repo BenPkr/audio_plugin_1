@@ -1,6 +1,7 @@
 #include "AudioScopePlot.h"
 #include "../PluginProcessor.h"
 #include "../Parameters.h"
+#include <cmath>
 
 AudioScopePlot::AudioScopePlot (AudioPluginAudioProcessor& processor)
     : audioProcessor (processor)
@@ -16,8 +17,49 @@ AudioScopePlot::~AudioScopePlot()
 
 void AudioScopePlot::timerCallback()
 {
-    numAvailableSamples = audioProcessor.copyAnalysisSamples (
-        inputSamples.data(), outputSamples.data(), gainSamples.data(), numPoints);
+    const int capturedSamples = audioProcessor.copyAnalysisSamples (
+        inputSamples.data(), outputSamples.data(), gainSamples.data(), capturePoints);
+    numAvailableSamples = juce::jmin (capturedSamples, numPoints);
+    displayStartIndex = capturedSamples - numAvailableSamples;
+    autoTriggered = false;
+
+    if (capturedSamples >= capturePoints)
+    {
+        float peakInput = 0.0f;
+        for (int i = 0; i < capturedSamples; ++i)
+            peakInput = juce::jmax (peakInput, std::abs (inputSamples[static_cast<size_t> (i)]));
+
+        const float triggerLevel = juce::jmax (0.0001f, peakInput * 0.02f);
+        constexpr int preTriggerSamples = numPoints / 4;
+        const int firstTriggerIndex = preTriggerSamples + 1;
+        const int lastTriggerIndex = capturedSamples - numPoints + preTriggerSamples;
+        const int preferredTriggerIndex = capturedSamples / 2;
+        int bestTriggerIndex = -1;
+        int bestDistance = capturedSamples;
+
+        for (int i = firstTriggerIndex; i <= lastTriggerIndex; ++i)
+        {
+            const float previous = inputSamples[static_cast<size_t> (i - 1)];
+            const float current = inputSamples[static_cast<size_t> (i)];
+            if (previous <= triggerLevel && current > triggerLevel)
+            {
+                const int distance = std::abs (i - preferredTriggerIndex);
+                if (distance < bestDistance)
+                {
+                    bestTriggerIndex = i;
+                    bestDistance = distance;
+                }
+            }
+        }
+
+        if (bestTriggerIndex >= 0)
+        {
+            displayStartIndex = bestTriggerIndex - preTriggerSamples;
+            numAvailableSamples = numPoints;
+            autoTriggered = true;
+        }
+    }
+
     showGainEnvelope = modeParam != nullptr && static_cast<int> (modeParam->load()) == 2;
     repaint();
 }
@@ -31,7 +73,9 @@ void AudioScopePlot::paint (juce::Graphics& g)
     auto bounds = getLocalBounds().toFloat().reduced (4.0f);
     g.setColour (juce::Colours::lightgrey);
     g.setFont (juce::FontOptions (11.0f));
-    g.drawText ("Input / Output Waveform", bounds.removeFromTop (16.0f), juce::Justification::left, false);
+    g.drawText (autoTriggered ? "Input / Output Waveform (Auto Trigger)"
+                              : "Input / Output Waveform (Free Run)",
+                bounds.removeFromTop (16.0f), juce::Justification::left, false);
 
     if (numAvailableSamples < 2 || bounds.isEmpty())
         return;
@@ -54,7 +98,8 @@ void AudioScopePlot::paint (juce::Graphics& g)
             const float x = envelopeBounds.getX()
                           + static_cast<float> (i) / static_cast<float> (numAvailableSamples - 1)
                           * envelopeBounds.getWidth();
-            const float gain = juce::jlimit (0.0f, 1.0f, gainSamples[static_cast<size_t> (i)]);
+            const float gain = juce::jlimit (
+                0.0f, 1.0f, gainSamples[static_cast<size_t> (displayStartIndex + i)]);
             const float y = envelopeBounds.getBottom() - gain * envelopeBounds.getHeight();
             if (i == 0)
                 envelopePath.startNewSubPath (x, y);
@@ -73,8 +118,9 @@ void AudioScopePlot::paint (juce::Graphics& g)
     {
         const float x = bounds.getX() + static_cast<float> (i) / static_cast<float> (numAvailableSamples - 1)
                                        * bounds.getWidth();
-        const float inputY = centreY - juce::jlimit (-1.0f, 1.0f, inputSamples[static_cast<size_t> (i)]) * halfHeight;
-        const float outputY = centreY - juce::jlimit (-1.0f, 1.0f, outputSamples[static_cast<size_t> (i)]) * halfHeight;
+        const auto sampleIndex = static_cast<size_t> (displayStartIndex + i);
+        const float inputY = centreY - juce::jlimit (-1.0f, 1.0f, inputSamples[sampleIndex]) * halfHeight;
+        const float outputY = centreY - juce::jlimit (-1.0f, 1.0f, outputSamples[sampleIndex]) * halfHeight;
         if (i == 0)
         {
             inputPath.startNewSubPath (x, inputY);

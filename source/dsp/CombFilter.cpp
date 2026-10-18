@@ -75,9 +75,9 @@ void CombFilter::processBlock(juce::AudioBuffer<float>& buffer)
         const float curFeedforward = smoothedFeedforward.getNextValue();
         const float curFeedback    = smoothedFeedback.getNextValue();
 
-        // L2 Energy Normalization Scaling Factor
+        // L-infinity gain normalization keeps the direct and feedback gains bounded.
         const float absFb = std::abs(curFeedback);
-        const float normScale = autoGainEnabled ? std::sqrt(1.0f - (absFb * absFb)) : 1.0f;
+        const float normScale = autoGainEnabled ? 1.0f - absFb : 1.0f;
 
         const float modOffsetMs = modEnabled ? modulator.processSample() : 0.0f;
 
