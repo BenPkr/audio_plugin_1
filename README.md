@@ -1,9 +1,10 @@
 # Universal Comb Filter
 
-This JUCE project builds two independent audio effect plugins: Universal Comb
+This JUCE project builds three independent audio effect plugins: Universal Comb
 Filter, a multi-mode effect with a configurable comb filter, ring modulator,
-tremolo, and phaser; and Feedforward Compressor, a stereo compressor/limiter.
-Each is built as a VST3 effect and a JUCE Standalone application.
+tremolo, and phaser; Feedforward Compressor, a stereo compressor/limiter; and
+Downward Expander. Each is built as a VST3 effect and a JUCE Standalone
+application.
 
 ## Features and GUI
 
@@ -70,6 +71,17 @@ applied equally to each channel. Ratio ranges from 1:1 to 19.9:1, with the
 control's endpoint selecting an infinite-ratio limiter. Meter readouts are
 rounded to whole dB and have no additional temporal smoothing.
 
+## Downward Expander
+
+Downward Expander is an independent plugin target with its own processor and
+editor. It has four controls: Threshold, Ratio, Attack, and Release. Below the
+threshold, attenuation increases according to the selected expansion ratio;
+there is no range control or maximum attenuation setting. Like the compressor,
+it supports matched mono and stereo layouts and applies linked gain equally to
+both channels. The editor includes a live input/output transfer curve, a marker
+for the current block-average input level, and whole-dB readouts of average
+input level and attenuation for the most recent block.
+
 ## Build setup
 
 ### Requirements
@@ -91,7 +103,7 @@ cmake -S . -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug
 cmake --build cmake-build-debug --config Debug --parallel
 ```
 
-CMake generates VST3 and Standalone targets for both plugins from
+CMake generates VST3 and Standalone targets for all three plugins from
 `CMakeLists.txt`. The project also adds JUCE's AudioPluginHost target to the
 build. Build artifacts are placed under each plugin's artefact directory. With
 the Debug configuration, the VST3 bundles are expected at:
@@ -99,6 +111,7 @@ the Debug configuration, the VST3 bundles are expected at:
 ```text
 cmake-build-debug/UniversalCombFilter_artefacts/Debug/VST3/Universal Comb Filter.vst3
 cmake-build-debug/FeedforwardCompressor_artefacts/Debug/VST3/Feedforward Compressor.vst3
+cmake-build-debug/DownwardExpander_artefacts/Debug/VST3/Downward Expander.vst3
 ```
 
 The Standalone applications are placed under the corresponding `Standalone`
@@ -120,6 +133,8 @@ The project separates the plugin shell, DSP modules, and editor visualizations:
   preset panels.
 - `source/compressor/` contains the independent compressor plugin's processor,
   parameter layout, editor, DSP, and transfer-curve visualization.
+- `source/expander/` contains the independent expander plugin's processor,
+  parameter layout, editor, and DSP.
 
 At runtime, `processBlock()` reads the selected processor mode and routes each
 audio block through that mode's DSP module. On a mode change, the newly selected
@@ -131,6 +146,7 @@ GUI side rather than in the audio callback.
 
 Universal Comb Filter currently supports mono input and mono output.
 Feedforward Compressor supports matched mono or stereo input/output layouts.
+Downward Expander supports matched mono or stereo input/output layouts.
 
 Getting Universal Comb Filter to work with stereo in Audacity has been
 problematic and is shelved for now.
@@ -140,7 +156,8 @@ problematic and is shelved for now.
 `testing/run_vst_tests.py` is an audio integration/analysis harness for
 Universal Comb Filter. It loads that plugin's built VST3 with Pedalboard, sets
 plugin parameters, processes generated signals, and writes plots and CSV data
-into `testing/output/`. It does not yet test Feedforward Compressor.
+into `testing/output/`. It does not yet test Feedforward Compressor or
+Downward Expander.
 
 The nine scenarios cover:
 

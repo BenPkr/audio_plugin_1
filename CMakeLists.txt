@@ -192,3 +192,49 @@ target_link_libraries(FeedforwardCompressor
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
+
+juce_add_plugin(DownwardExpander
+        COMPANY_NAME "Parker_Audio"
+        IS_SYNTH FALSE
+        NEEDS_MIDI_INPUT FALSE
+        NEEDS_MIDI_OUTPUT FALSE
+        IS_MIDI_EFFECT FALSE
+        EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+        COPY_PLUGIN_AFTER_BUILD TRUE
+        PLUGIN_MANUFACTURER_CODE pAud
+        PLUGIN_CODE Dwex
+        FORMATS VST3 Standalone
+        PRODUCT_NAME "Downward Expander"
+        NEEDS_WEB_BROWSER FALSE
+        NEEDS_CURL FALSE
+)
+
+target_include_directories(DownwardExpander PRIVATE source/expander)
+
+target_sources(DownwardExpander
+    PRIVATE
+        source/expander/ExpanderParameters.h
+        source/expander/ExpanderProcessor.h
+        source/expander/ExpanderProcessor.cpp
+        source/expander/ExpanderEditor.h
+        source/expander/ExpanderEditor.cpp
+        source/expander/dsp/Expander.h
+        source/expander/dsp/Expander.cpp
+        source/expander/gui/ExpanderTransferCurve.h
+        source/expander/gui/ExpanderTransferCurve.cpp
+)
+
+target_compile_definitions(DownwardExpander
+    PUBLIC
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_VST3_CAN_REPLACE_VST2=0)
+
+target_link_libraries(DownwardExpander
+    PRIVATE
+        juce::juce_audio_utils
+        juce::juce_dsp
+    PUBLIC
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_lto_flags
+        juce::juce_recommended_warning_flags)
