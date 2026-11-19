@@ -1,8 +1,10 @@
 # Universal Comb Filter
 
-Universal Comb Filter is a JUCE audio effect plugin with four selectable DSP
-processors: a configurable comb filter, a ring modulator, a tremolo, and a
-phaser. The plugin is built as a VST3 effect and a JUCE Standalone application.
+This JUCE project builds three independent audio effect plugins: Universal Comb
+Filter, a multi-mode effect with a configurable comb filter, ring modulator,
+tremolo, and phaser; Feedforward Compressor, a stereo compressor/limiter; and
+Downward Expander. Each is built as a VST3 effect and a JUCE Standalone
+application.
 
 ## Features and GUI
 
@@ -49,8 +51,36 @@ response and the range traversed by the notches.
 - The frequency panel shows the comb response in Comb Filter mode and live
   input/output spectra in Ring Mod and Tremolo modes. Phaser mode shows its
   current response and the response envelope over the LFO sweep.
+
 - The phase and pole-zero panels show comb-filter information in Comb Filter
   mode; these plots are inactive in Ring Mod, Tremolo, and Phaser modes.
+
+## Feedforward Compressor
+
+The compressor/limiter is a separate plugin target with its own processor,
+parameter state, and editor. It supports matched mono and stereo layouts and
+provides Threshold, Ratio, Knee, Attack, Release, and Make-Up Gain controls.
+Its transfer-curve display shows the current threshold/knee response, make-up
+gain, average sidechain input level, and average gain reduction for the most
+recent block.
+
+The detector averages the left and right channels for a stereo sidechain,
+computes the soft-knee gain reduction in dB, and applies separate attack and
+release ballistics to that gain-reduction envelope. The resulting gain is
+applied equally to each channel. Ratio ranges from 1:1 to 19.9:1, with the
+control's endpoint selecting an infinite-ratio limiter. Meter readouts are
+rounded to whole dB and have no additional temporal smoothing.
+
+## Downward Expander
+
+Downward Expander is an independent plugin target with its own processor and
+editor. It has four controls: Threshold, Ratio, Attack, and Release. Below the
+threshold, attenuation increases according to the selected expansion ratio;
+there is no range control or maximum attenuation setting. Like the compressor,
+it supports matched mono and stereo layouts and applies linked gain equally to
+both channels. The editor includes a live input/output transfer curve, a marker
+for the current block-average input level, and whole-dB readouts of average
+input level and attenuation for the most recent block.
 
 ## Build setup
 
@@ -73,17 +103,19 @@ cmake -S . -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug
 cmake --build cmake-build-debug --config Debug --parallel
 ```
 
-CMake generates the VST3 and Standalone targets from `CMakeLists.txt`. The
-project also adds JUCE's AudioPluginHost target to the build. Build artifacts
-are placed under `cmake-build-debug/UniversalCombFilter_artefacts/`; with the
-Debug configuration, the VST3 bundle is expected at:
+CMake generates VST3 and Standalone targets for all three plugins from
+`CMakeLists.txt`. The project also adds JUCE's AudioPluginHost target to the
+build. Build artifacts are placed under each plugin's artefact directory. With
+the Debug configuration, the VST3 bundles are expected at:
 
 ```text
 cmake-build-debug/UniversalCombFilter_artefacts/Debug/VST3/Universal Comb Filter.vst3
+cmake-build-debug/FeedforwardCompressor_artefacts/Debug/VST3/Feedforward Compressor.vst3
+cmake-build-debug/DownwardExpander_artefacts/Debug/VST3/Downward Expander.vst3
 ```
 
-The Standalone application is placed under the corresponding `Standalone`
-directory. Output locations can vary with the generator and build
+The Standalone applications are placed under the corresponding `Standalone`
+directories. Output locations can vary with the generator and build
 configuration.
 
 ## Architecture and audio flow
@@ -99,6 +131,10 @@ The project separates the plugin shell, DSP modules, and editor visualizations:
   and updates mode-dependent controls and visualizers.
 - `source/gui/` contains the scope, response plots, modulation plot, and Comb
   preset panels.
+- `source/compressor/` contains the independent compressor plugin's processor,
+  parameter layout, editor, DSP, and transfer-curve visualization.
+- `source/expander/` contains the independent expander plugin's processor,
+  parameter layout, editor, and DSP.
 
 At runtime, `processBlock()` reads the selected processor mode and routes each
 audio block through that mode's DSP module. On a mode change, the newly selected
@@ -108,15 +144,20 @@ envelope) are captured into fixed-capacity analysis buffers. The editor reads
 those buffers on its timer; FFT work for the live spectrum is performed on the
 GUI side rather than in the audio callback.
 
-The plugin currently supports mono input and mono output.
+Universal Comb Filter currently supports mono input and mono output.
+Feedforward Compressor supports matched mono or stereo input/output layouts.
+Downward Expander supports matched mono or stereo input/output layouts.
 
-Getting the plugin to work with stereo in audacity has been problematic and will be shelved
+Getting Universal Comb Filter to work with stereo in Audacity has been
+problematic and is shelved for now.
 
 ## Verification tests
 
-`testing/run_vst_tests.py` is an audio integration/analysis harness. It loads
-the built VST3 with Pedalboard, sets plugin parameters, processes generated
-signals, and writes plots and CSV data into `testing/output/`.
+`testing/run_vst_tests.py` is an audio integration/analysis harness for
+Universal Comb Filter. It loads that plugin's built VST3 with Pedalboard, sets
+plugin parameters, processes generated signals, and writes plots and CSV data
+into `testing/output/`. It does not yet test Feedforward Compressor or
+Downward Expander.
 
 The nine scenarios cover:
 
