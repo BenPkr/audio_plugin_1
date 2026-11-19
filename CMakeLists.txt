@@ -145,3 +145,50 @@ target_link_libraries(UniversalCombFilter
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
+
+juce_add_plugin(FeedforwardCompressor
+        COMPANY_NAME "Parker_Audio"
+        IS_SYNTH FALSE
+        NEEDS_MIDI_INPUT FALSE
+        NEEDS_MIDI_OUTPUT FALSE
+        IS_MIDI_EFFECT FALSE
+        EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+        COPY_PLUGIN_AFTER_BUILD TRUE
+        PLUGIN_MANUFACTURER_CODE pAud
+        PLUGIN_CODE Ffcp
+        FORMATS VST3 Standalone
+        PRODUCT_NAME "Feedforward Compressor"
+        NEEDS_WEB_BROWSER FALSE
+        NEEDS_CURL FALSE
+)
+
+target_include_directories(FeedforwardCompressor PRIVATE source/compressor)
+
+target_sources(FeedforwardCompressor
+    PRIVATE
+        source/compressor/CompressorParameters.h
+        source/compressor/CompressorProcessor.h
+        source/compressor/CompressorProcessor.cpp
+        source/compressor/CompressorEditor.h
+        source/compressor/CompressorEditor.cpp
+        source/compressor/dsp/Compressor.h
+        source/compressor/dsp/Compressor.cpp
+        source/compressor/dsp/CompressorMath.h
+        source/compressor/gui/CompressorTransferCurve.h
+        source/compressor/gui/CompressorTransferCurve.cpp
+)
+
+target_compile_definitions(FeedforwardCompressor
+    PUBLIC
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_VST3_CAN_REPLACE_VST2=0)
+
+target_link_libraries(FeedforwardCompressor
+    PRIVATE
+        juce::juce_audio_utils
+        juce::juce_dsp
+    PUBLIC
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_lto_flags
+        juce::juce_recommended_warning_flags)
